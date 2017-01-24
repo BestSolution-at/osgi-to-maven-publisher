@@ -24,6 +24,20 @@ private static final String SNAPSHOT_URL = "https://oss.sonatype.org/content/rep
 
 
 		CommandLineParser parser = new DefaultParser();
+	private static final String SNAPSHOT_URL = "https://oss.sonatype.org/content/repositories/snapshots/";
+	private static final String RELEASE_URL = "https://oss.sonatype.org/service/local/staging/deploy/maven2/";
+	private static final String REPOSITORY_ID = "sonatype";
+
+	public static void main(String[] args) throws Throwable {
+		Options options = new Options();
+		options.addOption("snapshots", false, "Publish snapshots");
+		options.addOption("mavenrepository",true, "Maven repository to publish the build to");
+		options.addOption("mavenrepositoryid",true,"Id of the maven repository to publish to");
+		options.addOption("p2repository", true, "P2 repository url");
+		options.addOption("publishSubset", true, "Publishing subset allowed values ALL, PLATFORM, EFX");
+		options.addOption("validateonly",false,"Validate if the content of the repository is mirrored and resolved correctly");
+
+		CommandLineParser parser = new DefaultParser();
 		CommandLine cmd = parser.parse(options, args);
 
 		String repository = cmd.hasOption("snapshots") ? "http://download.eclipse.org/efxclipse/runtime-nightly/site_assembly.zip" : null;
@@ -74,12 +88,12 @@ private static final String SNAPSHOT_URL = "https://oss.sonatype.org/content/rep
 				|| b.getBundleId().startsWith("org.eclipse.emf.mwe")
 				|| b.getBundleId().startsWith("org.eclipse.fx.ui.workbench3")
 				|| b.getBundleId().equals("org.eclipse.xtext.generator")
-				|| b.getBundleId().equals("org.eclipse.xtext")); });
+				|| b.getBundleId().startsWith("org.eclipse.xtext")); });
 		p.setGroupIdResolver( b -> {
 			if( b.getBundleId().startsWith("org.eclipse.fx") ) {
 				return "at.bestsolution.efxclipse.rt";
 			}
-			return "at.bestsolution.eclipse";
+			return "at.bestsolution.efxclipse.eclipse";
 		});
 
 		if( cmd.hasOption("publishSubset") && "PLATFORM".equals(cmd.getOptionValue("publishSubset")) ) {
@@ -88,7 +102,12 @@ private static final String SNAPSHOT_URL = "https://oss.sonatype.org/content/rep
 			p.setPublishFilter( b -> b.getBundleId().startsWith("org.eclipse.fx") );
 		}
 
-		p.publish();
+		if( cmd.hasOption("validateonly") ) {
+			p.validate();
+		} else {
+			p.publish();
+			p.validate();
+		}
 
 		Files.delete(file);
 	}
