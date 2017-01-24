@@ -34,6 +34,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -590,14 +591,19 @@ public abstract class OsgiToMaven {
 					});
 			});
 		this.executorService.shutdown();
-		System.out.println("done");
+		if( this.executorService.awaitTermination(4, TimeUnit.HOURS) ) {
+			System.out.println("done");
+		} else {
+			System.out.println("Publishing took too long killing it");
+			this.executorService.shutdownNow();
+		}
 
-		System.out.println("Validate bundles ...");
-		bundleList.stream().filter(bundleFilter)
-			.filter(publishFilter) // only publish stuff we have the source available
-			.forEach( b -> {
-
-			});
+//		System.out.println("Validate bundles ...");
+//		bundleList.stream().filter(bundleFilter)
+//			.filter(publishFilter) // only publish stuff we have the source available
+//			.forEach( b -> {
+//
+//			});
 
 //		mvn dependency:purge-local-repository -f publish-osgi/poms/org.eclipse.core.variables.xml -Posgi-validate -DresolutionFuzziness=artifactId -DreResolve=false
 //		mvn dependency:tree -f publish-osgi/poms/org.eclipse.core.variables.xml -Posgi-validate
