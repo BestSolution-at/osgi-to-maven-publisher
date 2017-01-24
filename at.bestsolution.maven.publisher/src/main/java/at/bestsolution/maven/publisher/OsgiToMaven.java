@@ -88,13 +88,26 @@ public abstract class OsgiToMaven {
 	private Function<Bundle, String> projectUrlResolver = b -> "https://projects.eclipse.org/";
 	private Function<Bundle, String> groupIdResolver = b -> "osgi.to.maven";
 	private Function<Bundle, SCM> scmUrlResolver = b -> new SCM("http://git.eclipse.org/c/",null,null);
-	private Function<Bundle, List<Developer>> developerResolver = b -> Collections.singletonList(new Developer("https://projects.eclipse.org/", null, null));
-	private Function<Bundle, List<License>> licenseResolver = b -> Collections.singletonList(new License("Eclipse Public License 1.0", "http://www.eclipse.org/legal/epl-v10.html"));
+	private Function<Bundle, List<Developer>> developerResolver = b -> {
+		if( b.getBundleId().startsWith("org.eclipse") ) {
+			return Collections.singletonList(new Developer("https://projects.eclipse.org/", null, null));
+		} else {
+			return Collections.emptyList();
+		}
+	};
+	private Function<Bundle, List<License>> licenseResolver = b -> {
+		if( b.getBundleId().startsWith("org.eclipse")) {
+			return Collections.singletonList(new License("Eclipse Public License 1.0", "http://www.eclipse.org/legal/epl-v10.html"));
+		} else if( b.getBundleId().startsWith("org.apache")) {
+			return Collections.singletonList(new License("Apache License, Version 2.0", "https://www.apache.org/licenses/LICENSE-2.0.txt"));
+		} else {
+			return Collections.emptyList();
+		}
+	};
 	private final String repositoryId;
 	private final String repositoryUrl;
 	private boolean dryRun = false;
 	private static final int PUBLISHING_THREADS = 1;
-	private ExecutorService executorService;
 	private Indexer indexer;
 	private IndexingContext indexContext;
 	private static AtomicInteger counter = new AtomicInteger();
@@ -314,7 +327,7 @@ public abstract class OsgiToMaven {
 			if( ! b.getResolvedBundleDeps().isEmpty() ) {
 				w.write("	<dependencies>\n");
 				for( ResolvedBundle rd : b.getResolvedBundleDeps() ) {
-					MavenDep dep = mavenReplacementLookup.apply(rd.getBundle()).orElse( new MavenDep("at.bestsolution.eclipse", rd.getBundle().getBundleId()));
+					MavenDep dep = mavenReplacementLookup.apply(rd.getBundle()).orElse( new MavenDep( groupIdResolver.apply(rd.getBundle()), rd.getBundle().getBundleId()));
 					w.write("		<dependency>\n");
 					w.write("			<groupId>"+dep.groupId+"</groupId>\n");
 					w.write("			<artifactId>"+dep.artifactId+"</artifactId>\n");
@@ -494,46 +507,14 @@ public abstract class OsgiToMaven {
     	out.close();
     	System.out.println("done");
 
-//    	out = new FileOutputStream(new File(file,"local-install.sh"), true);
-//    	exec(new String[] {
-//    		 "mvn",
-//    		 "org.apache.maven.plugins:maven-install-plugin:2.5.2:install-file",
-//    		 "-Dfile=" + new File(file,bundle.getBundleId() + "_" + bundle.getVersion() + ".jar").getAbsolutePath(),
-//    		 "-DpomFile=" + new File(file,"poms/"+bundle.getBundleId()+".xml").getAbsolutePath(),
-//    		 //"-DlocalRepositoryPath=" + new File(file,"m2-repo").getAbsolutePath()
-//    	}, out);
-//
-//    	exec(new String[] {
-//       		 "mvn",
-//       		 "org.apache.maven.plugins:maven-install-plugin:2.5.2:install-file",
-//       		 "-Dfile=" + new File(file,bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").getAbsolutePath(),
-//       		 "-DpomFile=" + new File(file,"poms/"+bundle.getBundleId()+".xml").getAbsolutePath(),
-//       		 //"-DlocalRepositoryPath=" + new File(file,"m2-repo").getAbsolutePath(),
-//       		 "-Dclassifier=sources"
-//       	}, out);
-
-    	out.close();
     	return true;
     }
 
-	public void publish() throws Throwable {
-		this.executorService = Executors.newFixedThreadPool(PUBLISHING_THREADS, r -> {
-			Thread thread = new Thread(r, "publish_"+counter.incrementAndGet());
-			return thread;
-		});
-
-		FileUtils.deleteDirectory(file);
-		new File(file,"poms").mkdirs();
-		new File(file,"m2-repo").mkdirs();
-
-		List<Bundle> bundleList = generateBundleList();
-
+	private Predicate<Bundle> generatePoms(List<Bundle> bundleList) {
 		bundleById = bundleList.stream().collect(Collectors.groupingBy( b -> b.getBundleId()));
 		bundleExports = bundleList.stream().flatMap( i -> i.getExportPackages().stream()).collect(Collectors.groupingBy(e -> e.getName(), Collectors.mapping( e -> e.getBundle(), Collectors.toSet())));
 
 		System.out.print("Resolving bundles ...");
-
-//		System.err.println(" ===> " + bundleList.stream().filter( b -> b.getBundleId().startsWith("javax.annotation")).findFirst().orElse(null));
 
 		bundleList.stream().filter(bundleFilter).forEach( b -> b.resolve(this::resolve));
 
@@ -551,26 +532,23 @@ public abstract class OsgiToMaven {
 			.filter(publishFilter)
 			.forEach(this::createPom);
 
-//		bundleList.stream()
-//			.filter(bundleFilter)
-//			.filter( b -> ! b.getBundleId().endsWith(".source"))
-//			.filter(publishFilter.negate())
-//			.forEach( b -> System.err.println("Missing source for '"+b.getBundleId()+"'"));
-
 		System.out.println("done");
+		return publishFilter;
+	}
 
-//		System.out.println("Fixing sat4j ...");
-//		bundleList.stream()
-//			.filter( b -> b.getBundleId().equals("org.sat4j.core"))
-//			.findFirst()
-//			.ifPresent(OsgiToMaven::publishSat4jCore);
-//
-//		bundleList.stream()
-//		.filter( b -> b.getBundleId().equals("org.sat4j.pb"))
-//		.findFirst()
-//		.ifPresent(OsgiToMaven::publishSat4jPb);
+	public void publish() throws Throwable {
+		ExecutorService executorService = Executors.newFixedThreadPool(PUBLISHING_THREADS, r -> {
+			Thread thread = new Thread(r, "publish_"+counter.incrementAndGet());
+			return thread;
+		});
 
-//		System.out.println("done");
+		FileUtils.deleteDirectory(file);
+		new File(file,"poms").mkdirs();
+		new File(file,"m2-repo").mkdirs();
+
+		List<Bundle> bundleList = generateBundleList();
+
+		Predicate<Bundle> publishFilter = generatePoms(bundleList);
 
 		System.out.println("Publishing bundles ...");
 		AtomicBoolean failure = new AtomicBoolean();
@@ -590,12 +568,12 @@ public abstract class OsgiToMaven {
 						}
 					});
 			});
-		this.executorService.shutdown();
-		if( this.executorService.awaitTermination(4, TimeUnit.HOURS) ) {
+		executorService.shutdown();
+		if( executorService.awaitTermination(4, TimeUnit.HOURS) ) {
 			System.out.println("done");
 		} else {
 			System.out.println("Publishing took too long killing it");
-			this.executorService.shutdownNow();
+			executorService.shutdownNow();
 		}
 
 //		System.out.println("Validate bundles ...");
@@ -609,23 +587,43 @@ public abstract class OsgiToMaven {
 //		mvn dependency:tree -f publish-osgi/poms/org.eclipse.core.variables.xml -Posgi-validate
 	}
 
-//	private static void publishSat4jCore(Bundle b) {
-//		try {
-//			FileUtils.copyFile(new File(OsgiToMaven.class.getClassLoader().getResource("sat4j-fix/org.sat4j.core-src.jar").toURI()), new File(file, b.getBundleId() + ".source_"+b.getVersion()+".jar"));
-//		} catch (IOException | URISyntaxException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-//	}
-//
-//	private static void publishSat4jPb(Bundle b) {
-//		try {
-//			FileUtils.copyFile(new File(OsgiToMaven.class.getClassLoader().getResource("sat4j-fix/org.sat4j.pb-src.jar").toURI()), new File(file, b.getBundleId() + ".source_"+b.getVersion()+".jar"));
-//		} catch (IOException | URISyntaxException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-//	}
+	public void validate() throws Throwable {
+		FileUtils.deleteDirectory(file);
+		new File(file,"poms").mkdirs();
+		new File(file,"m2-repo").mkdirs();
+
+		List<Bundle> bundleList = generateBundleList();
+		Predicate<Bundle> publishFilter = generatePoms(bundleList);
+
+		System.out.print("Validation bundles ...");
+		List<Bundle> failures = bundleList.stream().filter(bundleFilter)
+			.filter(publishFilter) // only publish stuff we have the source available
+			.filter( ((Predicate<Bundle>)this::validate).negate() )
+			.collect(Collectors.toList());
+
+		if( failures.isEmpty() ) {
+			System.out.println("done");
+		} else {
+			System.out.println();
+			failures.forEach( b -> System.out.println("Resolve failure for '"+b.getBundleId()+"'"));
+		}
+	}
+
+	private boolean validate(Bundle bundle) {
+		try {
+			FileOutputStream out = new FileOutputStream(new File(file,"validate.sh"), true);
+			return exec(new String[] {
+					"mvn",
+					"dependency:tree",
+					"-f",
+					new File(file,"/poms/"+bundle.getBundleId()+".xml").getAbsolutePath(),
+					"-Posgi-validate"
+			}, out);
+		} catch( Throwable t ) {
+
+		}
+		return false;
+	}
 
 	public abstract List<Bundle> generateBundleList() throws Throwable;
 }
