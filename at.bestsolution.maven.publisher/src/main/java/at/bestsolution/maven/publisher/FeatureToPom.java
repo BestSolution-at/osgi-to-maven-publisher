@@ -32,10 +32,13 @@ import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
+import com.google.common.io.Files;
+
 /**
  * Convert a feature to a pom
  */
 public class FeatureToPom {
+	private final File file = Files.createTempDir();
 	private File featureJar;
 
 	public FeatureToPom(File featureJar) {
@@ -43,13 +46,13 @@ public class FeatureToPom {
 	}
 
 	public void publish() throws Exception {
-		OsgiToMaven.unzipRepository(featureJar, OsgiToMaven.file);
+		OsgiToMaven.unzipRepository(featureJar, file);
 		SAXParserFactory instance = SAXParserFactory.newInstance();
 		SAXParser parser = instance.newSAXParser();
 		SaxHandlerImpl dh = new SaxHandlerImpl();
-		parser.parse(new File(OsgiToMaven.file,"feature.xml"), dh);
+		parser.parse(new File(file,"feature.xml"), dh);
 
-		try(FileOutputStream out = new FileOutputStream(new File(OsgiToMaven.file,"poms/"+dh.id+".xml"));
+		try(FileOutputStream out = new FileOutputStream(new File(file,"poms/"+dh.id+".xml"));
 				OutputStreamWriter w = new OutputStreamWriter(out);) {
 			w.write("<project xmlns=\"http://maven.apache.org/POM/4.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n");
 			w.write("	xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd\">\n");
@@ -57,6 +60,7 @@ public class FeatureToPom {
 			w.write("	<groupId>at.bestsolution.eclipse</groupId>\n");
 			w.write("	<artifactId>"+dh.id+"</artifactId>\n");
 			w.write("	<version>"+OsgiToMaven.toPomVersion(dh.version)+"</version>\n");
+			w.write("	<packaging>pom</packaging>\n");
 			w.write("	<dependencies>\n");
 			dh.dep.stream()
 				.filter( d -> !d.id.endsWith("source"))
@@ -107,13 +111,13 @@ public class FeatureToPom {
 		}
 	}
 
-	public static void main(String[] args) {
-		try {
-			FeatureToPom f2pom = new FeatureToPom(new File(OsgiToMaven.file,"features/org.eclipse.fx.target.feature_3.0.0.201612221915.jar"));
-			f2pom.publish();
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-	}
+//	public static void main(String[] args) {
+//		try {
+//			FeatureToPom f2pom = new FeatureToPom(new File(OsgiToMaven.file,"features/org.eclipse.fx.target.feature_3.0.0.201612221915.jar"));
+//			f2pom.publish();
+//		} catch (Exception e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
+//	}
 }

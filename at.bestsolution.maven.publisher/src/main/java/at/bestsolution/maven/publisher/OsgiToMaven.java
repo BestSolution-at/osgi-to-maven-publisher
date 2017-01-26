@@ -77,7 +77,7 @@ import com.google.common.io.Files;
  * Base class publishing artifacts
  */
 public abstract class OsgiToMaven {
-	public static final File file = new File("/Users/tomschindl/publish-osgi");
+	protected final File workingDirectory= Files.createTempDir();
 	private Map<String, Set<Bundle>> bundleExports;
 	private Map<String, List<Bundle>> bundleById;
 	private Function<Bundle, Optional<MavenDep>> mavenReplacementLookup = b -> Optional.empty();
@@ -283,7 +283,7 @@ public abstract class OsgiToMaven {
 	}
 
 	private void createPom(Bundle b) {
-		try( FileOutputStream out = new FileOutputStream(new File(new File(file,"poms"),b.getBundleId() + ".xml"));
+		try( FileOutputStream out = new FileOutputStream(new File(new File(workingDirectory,"poms"),b.getBundleId() + ".xml"));
 				OutputStreamWriter w = new OutputStreamWriter(out)) {
 			writeLine(w,"<project xmlns=\"http://maven.apache.org/POM/4.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"");
 			writeLine(w,"	xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd\">");
@@ -435,18 +435,18 @@ public abstract class OsgiToMaven {
 		}
 
 		System.out.print("	Publishing " + bundle.getBundleId() + " ... " );
-    	FileOutputStream out = new FileOutputStream(new File(file,"publish.sh"), true);
+    	FileOutputStream out = new FileOutputStream(new File(workingDirectory,"publish.sh"), true);
     	out.write(("\n\necho 'Publishing "+bundle.getBundleId()+"'\n\n").getBytes());
 
-    	String javadocDirectory = new File(file,"javadoc_"+Thread.currentThread().getName()).getAbsolutePath();
-    	String sourceDirectory = new File(file,"source_"+Thread.currentThread().getName()).getAbsolutePath();
-    	String javaDocJar = new File(file,"javadoc_"+Thread.currentThread().getName()+".jar").getAbsolutePath();
+    	String javadocDirectory = new File(workingDirectory,"javadoc_"+Thread.currentThread().getName()).getAbsolutePath();
+    	String sourceDirectory = new File(workingDirectory,"source_"+Thread.currentThread().getName()).getAbsolutePath();
+    	String javaDocJar = new File(workingDirectory,"javadoc_"+Thread.currentThread().getName()+".jar").getAbsolutePath();
 
     	exec(new String[] { "rm", "-rf", javadocDirectory },out);
     	exec(new String[] { "rm", "-rf", sourceDirectory },out);
     	exec(new String[] { "rm", "-f", javaDocJar},out);
 		exec(new String[] { "mkdir", javadocDirectory },out);
-		exec(new String[] { "unzip", "-d", sourceDirectory, new File(file,bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").getAbsolutePath() }, out);
+		exec(new String[] { "unzip", "-d", sourceDirectory, new File(workingDirectory,bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").getAbsolutePath() }, out);
 		exec(new String[] { "javadoc", "-d", javadocDirectory, "-sourcepath", sourceDirectory, "-subpackages", "."}, out);
 
 		exec(new String[] { "jar", "cf", javaDocJar, "-C", javadocDirectory+"/", "." },out);
@@ -455,22 +455,22 @@ public abstract class OsgiToMaven {
 			"gpg:sign-and-deploy-file",
 			"-Durl="+repositoryUrl,
 			"-DrepositoryId="+repositoryId,
-			"-DpomFile="+new File(file,"/poms/"+bundle.getBundleId()+".xml").getAbsolutePath(),
-			"-Dfile=" + new File(file,bundle.getBundleId() + "_" + bundle.getVersion() + ".jar").getAbsolutePath()
+			"-DpomFile="+new File(workingDirectory,"/poms/"+bundle.getBundleId()+".xml").getAbsolutePath(),
+			"-Dfile=" + new File(workingDirectory,bundle.getBundleId() + "_" + bundle.getVersion() + ".jar").getAbsolutePath()
     	},out);
     	if( ! rv ) {
     		System.err.println("Failed to publish binary artifact - '"+bundle.getBundleId()+"'");
     		return false;
     	}
 
-    	if( new File(file,bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").exists() ) {
+    	if( new File(workingDirectory,bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").exists() ) {
         	rv = exec( new String[] {
         			"mvn",
         			"gpg:sign-and-deploy-file",
         			"-Durl="+repositoryUrl,
         			"-DrepositoryId="+repositoryId,
-        			"-DpomFile="+new File(file,"/poms/"+bundle.getBundleId()+".xml").getAbsolutePath(),
-        			"-Dfile=" + new File(file,bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").getAbsolutePath(),
+        			"-DpomFile="+new File(workingDirectory,"/poms/"+bundle.getBundleId()+".xml").getAbsolutePath(),
+        			"-Dfile=" + new File(workingDirectory,bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").getAbsolutePath(),
         			"-Dclassifier=sources"
             	},out);
 
@@ -484,7 +484,7 @@ public abstract class OsgiToMaven {
     				"gpg:sign-and-deploy-file",
     				"-Durl="+repositoryUrl,
     				"-DrepositoryId="+repositoryId,
-    				"-DpomFile="+new File(file,"/poms/"+bundle.getBundleId()+".xml").getAbsolutePath(),
+    				"-DpomFile="+new File(workingDirectory,"/poms/"+bundle.getBundleId()+".xml").getAbsolutePath(),
     				"-Dfile="+javaDocJar,
     				"-Dclassifier=javadoc"
     	    	},out);
@@ -523,7 +523,7 @@ public abstract class OsgiToMaven {
 		System.out.print("Generated pom.xml files ...");
 
 		Predicate<Bundle> publishFilter = b ->
-			bundleById.containsKey( b.getBundleId() + ".source" ); // only publish stuff we have the source available
+			bundleById.containsKey( b.getBundleId() + ".source" ) || ! sourceEnforced.test(b); // only publish stuff we have the source available
 
 		publishFilter = this.publishFilter.and(publishFilter).and( b -> ! mavenReplacementLookup.apply(b).isPresent() );
 
@@ -542,9 +542,9 @@ public abstract class OsgiToMaven {
 			return thread;
 		});
 
-		FileUtils.deleteDirectory(file);
-		new File(file,"poms").mkdirs();
-		new File(file,"m2-repo").mkdirs();
+		FileUtils.deleteDirectory(workingDirectory);
+		new File(workingDirectory,"poms").mkdirs();
+		new File(workingDirectory,"m2-repo").mkdirs();
 
 		List<Bundle> bundleList = generateBundleList();
 
@@ -576,21 +576,13 @@ public abstract class OsgiToMaven {
 			executorService.shutdownNow();
 		}
 
-//		System.out.println("Validate bundles ...");
-//		bundleList.stream().filter(bundleFilter)
-//			.filter(publishFilter) // only publish stuff we have the source available
-//			.forEach( b -> {
-//
-//			});
-
-//		mvn dependency:purge-local-repository -f publish-osgi/poms/org.eclipse.core.variables.xml -Posgi-validate -DresolutionFuzziness=artifactId -DreResolve=false
-//		mvn dependency:tree -f publish-osgi/poms/org.eclipse.core.variables.xml -Posgi-validate
+		FileUtils.deleteDirectory(workingDirectory);
 	}
 
 	public void validate() throws Throwable {
-		FileUtils.deleteDirectory(file);
-		new File(file,"poms").mkdirs();
-		new File(file,"m2-repo").mkdirs();
+		FileUtils.deleteDirectory(workingDirectory);
+		new File(workingDirectory,"poms").mkdirs();
+		new File(workingDirectory,"m2-repo").mkdirs();
 
 		List<Bundle> bundleList = generateBundleList();
 		Predicate<Bundle> publishFilter = generatePoms(bundleList);
@@ -607,16 +599,18 @@ public abstract class OsgiToMaven {
 			System.out.println();
 			failures.forEach( b -> System.out.println("Resolve failure for '"+b.getBundleId()+"'"));
 		}
+
+		FileUtils.deleteDirectory(workingDirectory);
 	}
 
 	private boolean validate(Bundle bundle) {
 		try {
-			FileOutputStream out = new FileOutputStream(new File(file,"validate.sh"), true);
+			FileOutputStream out = new FileOutputStream(new File(workingDirectory,"validate.sh"), true);
 			return exec(new String[] {
 					"mvn",
 					"dependency:tree",
 					"-f",
-					new File(file,"/poms/"+bundle.getBundleId()+".xml").getAbsolutePath(),
+					new File(workingDirectory,"/poms/"+bundle.getBundleId()+".xml").getAbsolutePath(),
 					"-Posgi-validate"
 			}, out);
 		} catch( Throwable t ) {

@@ -155,11 +155,11 @@ public class R5ToMavenSax extends OsgiToMaven {
 
     @Override
     public List<Bundle> generateBundleList() throws Throwable {
-    	unzipRepository(new File(indexZip),file);
+    	unzipRepository(new File(indexZip),workingDirectory);
 		SAXParserFactory instance = SAXParserFactory.newInstance();
 		SAXParser parser = instance.newSAXParser();
 		SaxHandlerImpl dh = new SaxHandlerImpl();
-		parser.parse(new GzipCompressorInputStream(new FileInputStream(new File(file,"repository.xml.gz"))), dh);
+		parser.parse(new GzipCompressorInputStream(new FileInputStream(new File(workingDirectory,"repository.xml.gz"))), dh);
 
     	return dh.bundles;
     }

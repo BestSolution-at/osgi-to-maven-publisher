@@ -44,14 +44,14 @@ public class P2ToMavenSax extends OsgiToMaven {
 
 	@Override
 	public List<Bundle> generateBundleList() throws Throwable {
-		unzipRepository(new File(indexZip),file);
-		unzipRepository(new File(file,"content.jar"), file);
-		FileUtils.copyDirectory(new File(file,"plugins"), file);
+		unzipRepository(new File(indexZip),workingDirectory);
+		unzipRepository(new File(workingDirectory,"content.jar"), workingDirectory);
+		FileUtils.copyDirectory(new File(workingDirectory,"plugins"), workingDirectory);
 
 		SAXParserFactory instance = SAXParserFactory.newInstance();
 		SAXParser parser = instance.newSAXParser();
 		SaxHandlerImpl dh = new SaxHandlerImpl();
-		parser.parse(new FileInputStream(new File(file,"content.xml")), dh);
+		parser.parse(new FileInputStream(new File(workingDirectory,"content.xml")), dh);
 
 		return dh.bundles;
 	}
