@@ -136,6 +136,10 @@ public abstract class OsgiToMaven {
 		this.groupIdResolver = groupIdResolver;
 	}
 
+	public void setSnapshotFilter(Predicate<Bundle> snapshotFilter) {
+		this.snapshotFilter = snapshotFilter;
+	}
+
 	public static class MavenDep {
 		public final String groupId;
 		public final String artifactId;
