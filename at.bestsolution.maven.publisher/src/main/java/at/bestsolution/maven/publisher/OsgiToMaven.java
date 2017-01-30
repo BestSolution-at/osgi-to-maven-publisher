@@ -37,6 +37,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -104,6 +105,7 @@ public abstract class OsgiToMaven {
 			return Collections.emptyList();
 		}
 	};
+	private BiPredicate<Bundle, ResolvedBundle> resolvedBundleFilter = (b,rb) -> true;
 	private final String repositoryId;
 	private final String repositoryUrl;
 	private boolean dryRun = false;
@@ -138,6 +140,10 @@ public abstract class OsgiToMaven {
 
 	public void setSnapshotFilter(Predicate<Bundle> snapshotFilter) {
 		this.snapshotFilter = snapshotFilter;
+	}
+
+	public void setResolvedBundleFilter(BiPredicate<Bundle, ResolvedBundle> resolvedBundleFilter) {
+		this.resolvedBundleFilter = resolvedBundleFilter;
 	}
 
 	public static class MavenDep {
@@ -270,7 +276,7 @@ public abstract class OsgiToMaven {
 			return list.stream().map( bb -> new ResolvedBundle(bb, true)).collect(Collectors.toSet());
 		}).flatMap( bs -> bs.stream()).collect(Collectors.toSet()));
 
-		return rv;
+		return rv.stream().filter( rb -> resolvedBundleFilter.test(b, rb)).collect(Collectors.toSet());
 	}
 
 	static String toPomVersion(String version) {
