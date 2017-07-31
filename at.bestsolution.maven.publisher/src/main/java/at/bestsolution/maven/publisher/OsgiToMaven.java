@@ -567,10 +567,8 @@ public abstract class OsgiToMaven {
 			.forEach( b -> {
 					executorService.execute( () -> {
 						try {
-							if( ! failure.get() ) {
-								if( ! publish(b) ) {
-									failure.set(true);
-								}
+							if( ! publish(b) ) {
+								failure.set(true);
 							}
 						} catch (Throwable e) {
 							e.printStackTrace();
