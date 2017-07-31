@@ -485,7 +485,7 @@ public abstract class OsgiToMaven {
             	},out);
 
         	if( ! rv ) {
-        		System.err.println("Failed to publish source artifact - '"+bundle.getBundleId()+"'");
+        		System.err.println("ERROR: Failed to publish source artifact - '"+bundle.getBundleId()+"'");
         		return false;
         	}
 
@@ -500,11 +500,11 @@ public abstract class OsgiToMaven {
     	    	},out);
 
 	    	if( ! rv ) {
-	    		System.err.println("Failed to publish javadoc artifact - '"+bundle.getBundleId()+"'");
+	    		System.err.println("ERROR: Failed to publish javadoc artifact - '"+bundle.getBundleId()+"'");
 	    		return false;
 	    	}
     	} else {
-    		System.err.println("No source jar available");
+    		System.err.println("ERROR: No source jar available");
     		if( sourceEnforced.test(bundle) ) {
     			return false;
     		}
@@ -585,6 +585,12 @@ public abstract class OsgiToMaven {
 			System.out.println("Publishing took too long killing it");
 			executorService.shutdownNow();
 		}
+		
+		if( failure.get() ) {
+			System.out.println("Failed to publish all bundles. Exiting ...");
+			System.exit(1);
+		}
+
 
 		FileUtils.deleteDirectory(workingDirectory);
 	}
