@@ -17,7 +17,6 @@
  *******************************************************************************/
 package at.bestsolution.maven.publisher;
 
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.util.ArrayList;
@@ -36,9 +35,9 @@ import org.xml.sax.helpers.DefaultHandler;
  */
 public class R5ToMavenSax extends OsgiToMaven {
 	static boolean DEBUG = false;
+
 	static enum Context {
-		OSGI_IDENTITY,
-		OSGI_EXPORT_PACKAGE, OSGI_IMPORT_PACKAGE, OSGI_REQUIRE_BUNDLE
+		OSGI_IDENTITY, OSGI_EXPORT_PACKAGE, OSGI_IMPORT_PACKAGE, OSGI_REQUIRE_BUNDLE
 	}
 
 	static class SaxHandlerImpl extends DefaultHandler {
@@ -51,76 +50,79 @@ public class R5ToMavenSax extends OsgiToMaven {
 		private Context context;
 		private String name;
 
-
 		@Override
 		public void startElement(String uri, String localName, String qName, Attributes attributes)
 				throws SAXException {
-			if( DEBUG ) {
-				System.err.println( "IN: " + qName );
-				for( int i = 0; i < attributes.getLength(); i++ ) {
+			if (DEBUG) {
+				System.err.println("IN: " + qName);
+				for (int i = 0; i < attributes.getLength(); i++) {
 					System.err.println(" - " + attributes.getQName(i) + " = " + attributes.getValue(i));
 				}
 			}
 
-			if( qName.equals("resource") ) {
+			if (qName.equals("resource")) {
 				inResource = true;
-			} else if( inResource && qName.equals("capability") ) {
-				if( "osgi.identity".equals(attributes.getValue("namespace")) ) {
+			} else if (inResource && qName.equals("capability")) {
+				if ("osgi.identity".equals(attributes.getValue("namespace"))) {
 					context = Context.OSGI_IDENTITY;
-				} else if( "osgi.wiring.package".equals(attributes.getValue("namespace")) ) {
+				} else if ("osgi.wiring.package".equals(attributes.getValue("namespace"))) {
 					context = Context.OSGI_EXPORT_PACKAGE;
 					currentExport = new ExportPackage();
-					if( currentBundle != null ) {
+					if (currentBundle != null) {
 						currentBundle.addExport(currentExport);
 					}
 				}
-			} else if( inResource && qName.equals("requirement") ) {
-				if( "osgi.wiring.package".equals(attributes.getValue("namespace")) ) {
+			} else if (inResource && qName.equals("requirement")) {
+				if ("osgi.wiring.package".equals(attributes.getValue("namespace"))) {
 					context = Context.OSGI_IMPORT_PACKAGE;
 					currentImport = new ImportPackage();
-					if( currentBundle != null ) {
+					if (currentBundle != null) {
 						currentBundle.addImport(currentImport);
 					}
-				} else if( "osgi.wiring.bundle".equals(attributes.getValue("namespace")) ) {
+				} else if ("osgi.wiring.bundle".equals(attributes.getValue("namespace"))) {
 					context = Context.OSGI_REQUIRE_BUNDLE;
 					currentRequireBundle = new RequireBundle();
-					if( currentBundle != null ) {
+					if (currentBundle != null) {
 						currentBundle.addRequire(currentRequireBundle);
 					}
 				}
-			} else if( context == Context.OSGI_IDENTITY && qName.equals("attribute") ) {
-				if( "type".equals(attributes.getValue("name")) ) {
-					if( "osgi.bundle".equals(attributes.getValue("value")) ) {
+			} else if (context == Context.OSGI_IDENTITY && qName.equals("attribute")) {
+				if ("type".equals(attributes.getValue("name"))) {
+					if ("osgi.bundle".equals(attributes.getValue("value"))) {
 						currentBundle = new Bundle();
 						currentBundle.setBundleId(name);
-					} else if( "osgi.fragment".equals(attributes.getValue("value")) ) {
+					} else if ("osgi.fragment".equals(attributes.getValue("value"))) {
 						currentBundle = new Fragment();
 						currentBundle.setBundleId(name);
-//						System.err.println("NAME: " + name);
+						// System.err.println("NAME: " + name);
 					}
-				} else if( "osgi.identity".equals(attributes.getValue("name")) ) {
+				} else if ("osgi.identity".equals(attributes.getValue("name"))) {
 					name = attributes.getValue("value");
-				} else if( "version".equals(attributes.getValue("name")) ) {
+				} else if ("version".equals(attributes.getValue("name"))) {
 					currentBundle.setVersion(attributes.getValue("value"));
 				}
-			} else if( context == Context.OSGI_EXPORT_PACKAGE && qName.equals("attribute") ) {
-				if( "osgi.wiring.package".equals(attributes.getValue("name")) ) {
+			} else if (context == Context.OSGI_EXPORT_PACKAGE && qName.equals("attribute")) {
+				if ("osgi.wiring.package".equals(attributes.getValue("name"))) {
 					currentExport.setName(attributes.getValue("value"));
-				} else if( "version".equals(attributes.getValue("name")) ) {
+				} else if ("version".equals(attributes.getValue("name"))) {
 					currentExport.setVersion(attributes.getValue("value"));
 				}
-			} else if( context == Context.OSGI_IMPORT_PACKAGE && qName.equals("directive") ) {
-				if( "filter".equals(attributes.getValue("name")) ) {
+			} else if (context == Context.OSGI_IMPORT_PACKAGE && qName.equals("directive")) {
+				if ("filter".equals(attributes.getValue("name"))) {
 					String filter = attributes.getValue("value");
-					currentImport.setName(filter.substring(filter.indexOf("osgi.wiring.package=")+"osgi.wiring.package=".length(),filter.indexOf(')')));
-				} else if( "resolution".equals(attributes.getValue("name")) ) {
+					currentImport.setName(
+							filter.substring(filter.indexOf("osgi.wiring.package=") + "osgi.wiring.package=".length(),
+									filter.indexOf(')')));
+				} else if ("resolution".equals(attributes.getValue("name"))) {
 					currentImport.setOptional("optional".equals(attributes.getValue("value")));
 				}
-			} else if( context == Context.OSGI_REQUIRE_BUNDLE && qName.equals("directive") ) {
-				if( "filter".equals(attributes.getValue("name")) ) {
+			} else if (context == Context.OSGI_REQUIRE_BUNDLE && qName.equals("directive")) {
+				if ("filter".equals(attributes.getValue("name"))) {
 					String filter = attributes.getValue("value");
-					currentRequireBundle.setName(filter.substring(filter.indexOf("osgi.wiring.bundle=")+"osgi.wiring.bundle=".length(),filter.indexOf(')')));
-				} else if( "resolution".equals(attributes.getValue("name")) ) {
+					currentRequireBundle.setName(
+							filter.substring(filter.indexOf("osgi.wiring.bundle=") + "osgi.wiring.bundle=".length(),
+									filter.indexOf(')')));
+				} else if ("resolution".equals(attributes.getValue("name"))) {
 					currentRequireBundle.setOptional("optional".equals(attributes.getValue("value")));
 				}
 			}
@@ -129,18 +131,18 @@ public class R5ToMavenSax extends OsgiToMaven {
 		@Override
 		public void endElement(String uri, String localName, String qName) throws SAXException {
 			super.endElement(uri, localName, qName);
-			if( DEBUG ) {
-				System.err.println( "OUT: " + qName);
+			if (DEBUG) {
+				System.err.println("OUT: " + qName);
 			}
 
-			if( inResource && qName.equals("resource") ) {
+			if (inResource && qName.equals("resource")) {
 				inResource = false;
-				if( currentBundle != null ) {
+				if (currentBundle != null) {
 					bundles.add(currentBundle);
 				}
 				currentBundle = null;
 				context = null;
-			} else if( qName.equals("capability") || qName.equals("requirement") ) {
+			} else if (qName.equals("capability") || qName.equals("requirement")) {
 				context = null;
 			}
 		}
@@ -148,19 +150,21 @@ public class R5ToMavenSax extends OsgiToMaven {
 
 	private String indexZip;
 
-    public R5ToMavenSax(String indexZip, String repositoryUrl, String repositoryId) {
-    	super(repositoryUrl,repositoryId);
+	public R5ToMavenSax(String indexZip, String repositoryUrl, String repositoryId) {
+		super(repositoryUrl, repositoryId);
 		this.indexZip = indexZip;
 	}
 
-    @Override
-    public List<Bundle> generateBundleList() throws Throwable {
-    	unzipRepository(new File(indexZip),workingDirectory);
+	@Override
+	public List<Bundle> generateBundleList() throws Throwable {
+		unzipRepository(new File(indexZip), workingDirectory);
 		SAXParserFactory instance = SAXParserFactory.newInstance();
 		SAXParser parser = instance.newSAXParser();
 		SaxHandlerImpl dh = new SaxHandlerImpl();
-		parser.parse(new GzipCompressorInputStream(new FileInputStream(new File(workingDirectory,"repository.xml.gz"))), dh);
+		parser.parse(
+				new GzipCompressorInputStream(new FileInputStream(new File(workingDirectory, "repository.xml.gz"))),
+				dh);
 
-    	return dh.bundles;
-    }
+		return dh.bundles;
+	}
 }

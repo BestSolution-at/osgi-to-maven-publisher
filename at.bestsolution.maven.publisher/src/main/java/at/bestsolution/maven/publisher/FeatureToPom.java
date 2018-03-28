@@ -17,7 +17,6 @@
  *******************************************************************************/
 package at.bestsolution.maven.publisher;
 
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -50,32 +49,30 @@ public class FeatureToPom {
 		SAXParserFactory instance = SAXParserFactory.newInstance();
 		SAXParser parser = instance.newSAXParser();
 		SaxHandlerImpl dh = new SaxHandlerImpl();
-		parser.parse(new File(file,"feature.xml"), dh);
+		parser.parse(new File(file, "feature.xml"), dh);
 
-		try(FileOutputStream out = new FileOutputStream(new File(file,"poms/"+dh.id+".xml"));
+		try (FileOutputStream out = new FileOutputStream(new File(file, "poms/" + dh.id + ".xml"));
 				OutputStreamWriter w = new OutputStreamWriter(out);) {
 			w.write("<project xmlns=\"http://maven.apache.org/POM/4.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n");
 			w.write("	xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd\">\n");
 			w.write("	<modelVersion>4.0.0</modelVersion>\n");
 			w.write("	<groupId>at.bestsolution.eclipse</groupId>\n");
-			w.write("	<artifactId>"+dh.id+"</artifactId>\n");
-			w.write("	<version>"+OsgiToMaven.toPomVersion(dh.version)+"</version>\n");
+			w.write("	<artifactId>" + dh.id + "</artifactId>\n");
+			w.write("	<version>" + OsgiToMaven.toPomVersion(dh.version) + "</version>\n");
 			w.write("	<packaging>pom</packaging>\n");
 			w.write("	<dependencies>\n");
-			dh.dep.stream()
-				.filter( d -> !d.id.endsWith("source"))
-				.forEach( d -> {
-					try {
-						w.write("		<dependency>\n");
-						w.write("			<groupId>at.bestsolution.eclipse</groupId>\n");
-						w.write("			<artifactId>"+d.id+"</artifactId>\n");
-						w.write("			<version>"+OsgiToMaven.toPomVersion(d.version)+"</version>\n");
-						w.write("		</dependency>\n");
-					} catch (IOException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-				});
+			dh.dep.stream().filter(d -> !d.id.endsWith("source")).forEach(d -> {
+				try {
+					w.write("		<dependency>\n");
+					w.write("			<groupId>at.bestsolution.eclipse</groupId>\n");
+					w.write("			<artifactId>" + d.id + "</artifactId>\n");
+					w.write("			<version>" + OsgiToMaven.toPomVersion(d.version) + "</version>\n");
+					w.write("		</dependency>\n");
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			});
 			w.write("	</dependencies>\n");
 			w.write("</project>");
 			w.close();
@@ -92,11 +89,11 @@ public class FeatureToPom {
 		public void startElement(String uri, String localName, String qName, Attributes attributes)
 				throws SAXException {
 			super.startElement(uri, localName, qName, attributes);
-			if( qName.equals("feature") ) {
+			if (qName.equals("feature")) {
 				id = attributes.getValue("id");
 				version = attributes.getValue("version");
-			} else if( /*qName.equals("includes") ||*/ qName.equals("plugin") ) {
-				dep.add(new Dep(attributes.getValue("id"),attributes.getValue("version")));
+			} else if ( /* qName.equals("includes") || */ qName.equals("plugin")) {
+				dep.add(new Dep(attributes.getValue("id"), attributes.getValue("version")));
 			}
 		}
 	}
@@ -111,13 +108,14 @@ public class FeatureToPom {
 		}
 	}
 
-//	public static void main(String[] args) {
-//		try {
-//			FeatureToPom f2pom = new FeatureToPom(new File(OsgiToMaven.file,"features/org.eclipse.fx.target.feature_3.0.0.201612221915.jar"));
-//			f2pom.publish();
-//		} catch (Exception e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-//	}
+	// public static void main(String[] args) {
+	// try {
+	// FeatureToPom f2pom = new FeatureToPom(new
+	// File(OsgiToMaven.file,"features/org.eclipse.fx.target.feature_3.0.0.201612221915.jar"));
+	// f2pom.publish();
+	// } catch (Exception e) {
+	// // TODO Auto-generated catch block
+	// e.printStackTrace();
+	// }
+	// }
 }

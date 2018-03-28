@@ -17,7 +17,6 @@
  *******************************************************************************/
 package at.bestsolution.maven.publisher;
 
-
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -48,9 +47,9 @@ import java.util.zip.ZipFile;
 
 import org.apache.commons.compress.utils.IOUtils;
 import org.apache.commons.io.FileUtils;
+import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.Query;
-import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.maven.index.Field;
 import org.apache.maven.index.FlatSearchRequest;
 import org.apache.maven.index.FlatSearchResponse;
@@ -78,7 +77,7 @@ import com.google.common.io.Files;
  * Base class publishing artifacts
  */
 public abstract class OsgiToMaven {
-	protected final File workingDirectory= Files.createTempDir();
+	protected final File workingDirectory = Files.createTempDir();
 	private Map<String, Set<Bundle>> bundleExports;
 	private Map<String, List<Bundle>> bundleById;
 	private Function<Bundle, Optional<MavenDep>> mavenReplacementLookup = b -> Optional.empty();
@@ -88,24 +87,26 @@ public abstract class OsgiToMaven {
 	private Predicate<Bundle> sourceEnforced = b -> true;
 	private Function<Bundle, String> projectUrlResolver = b -> "https://projects.eclipse.org/";
 	private Function<Bundle, String> groupIdResolver = b -> "osgi.to.maven";
-	private Function<Bundle, SCM> scmUrlResolver = b -> new SCM("http://git.eclipse.org/c/",null,null);
+	private Function<Bundle, SCM> scmUrlResolver = b -> new SCM("http://git.eclipse.org/c/", null, null);
 	private Function<Bundle, List<Developer>> developerResolver = b -> {
-		if( b.getBundleId().startsWith("org.eclipse") ) {
+		if (b.getBundleId().startsWith("org.eclipse")) {
 			return Collections.singletonList(new Developer("https://projects.eclipse.org/", null, null));
 		} else {
 			return Collections.emptyList();
 		}
 	};
 	private Function<Bundle, List<License>> licenseResolver = b -> {
-		if( b.getBundleId().startsWith("org.eclipse")) {
-			return Collections.singletonList(new License("Eclipse Public License 1.0", "http://www.eclipse.org/legal/epl-v10.html"));
-		} else if( b.getBundleId().startsWith("org.apache")) {
-			return Collections.singletonList(new License("Apache License, Version 2.0", "https://www.apache.org/licenses/LICENSE-2.0.txt"));
+		if (b.getBundleId().startsWith("org.eclipse")) {
+			return Collections.singletonList(
+					new License("Eclipse Public License 1.0", "http://www.eclipse.org/legal/epl-v10.html"));
+		} else if (b.getBundleId().startsWith("org.apache")) {
+			return Collections.singletonList(
+					new License("Apache License, Version 2.0", "https://www.apache.org/licenses/LICENSE-2.0.txt"));
 		} else {
 			return Collections.emptyList();
 		}
 	};
-	private BiPredicate<Bundle, ResolvedBundle> resolvedBundleFilter = (b,rb) -> true;
+	private BiPredicate<Bundle, ResolvedBundle> resolvedBundleFilter = (b, rb) -> true;
 	private final String repositoryId;
 	private final String repositoryUrl;
 	private boolean dryRun = false;
@@ -196,153 +197,161 @@ public abstract class OsgiToMaven {
 	}
 
 	public static void unzipRepository(File archive, File outDir) throws ZipException, IOException {
-        ZipFile zipfile = new ZipFile(archive);
-        for (Enumeration<? extends ZipEntry> e = zipfile.entries(); e.hasMoreElements(); ) {
-            ZipEntry entry = (ZipEntry) e.nextElement();
-            unzipEntry(zipfile, entry, outDir);
-        }
+		ZipFile zipfile = new ZipFile(archive);
+		for (Enumeration<? extends ZipEntry> e = zipfile.entries(); e.hasMoreElements();) {
+			ZipEntry entry = (ZipEntry) e.nextElement();
+			unzipEntry(zipfile, entry, outDir);
+		}
 	}
 
 	private static void unzipEntry(ZipFile zipfile, ZipEntry entry, File outputDir) throws IOException {
-        if (entry.isDirectory()) {
-            createDir(new File(outputDir, entry.getName()));
-            return;
-        }
+		if (entry.isDirectory()) {
+			createDir(new File(outputDir, entry.getName()));
+			return;
+		}
 
-        File outputFile = new File(outputDir, entry.getName());
-        if (!outputFile.getParentFile().exists()){
-            createDir(outputFile.getParentFile());
-        }
+		File outputFile = new File(outputDir, entry.getName());
+		if (!outputFile.getParentFile().exists()) {
+			createDir(outputFile.getParentFile());
+		}
 
-        BufferedInputStream inputStream = new BufferedInputStream(zipfile.getInputStream(entry));
-        BufferedOutputStream outputStream = new BufferedOutputStream(new FileOutputStream(outputFile));
+		BufferedInputStream inputStream = new BufferedInputStream(zipfile.getInputStream(entry));
+		BufferedOutputStream outputStream = new BufferedOutputStream(new FileOutputStream(outputFile));
 
-        try {
-            IOUtils.copy(inputStream, outputStream);
-        } finally {
-            outputStream.close();
-            inputStream.close();
-        }
-    }
+		try {
+			IOUtils.copy(inputStream, outputStream);
+		} finally {
+			outputStream.close();
+			inputStream.close();
+		}
+	}
 
-    private static void createDir(File dir) {
-        dir.mkdirs();
-    }
+	private static void createDir(File dir) {
+		dir.mkdirs();
+	}
 
 	private Set<ResolvedBundle> resolve(Bundle b) {
 		Set<ResolvedBundle> rv = new HashSet<ResolvedBundle>();
-		rv.addAll(b.getImportPackages().stream().filter( i -> !i.isOptional()).map( i -> {
+		rv.addAll(b.getImportPackages().stream().filter(i -> !i.isOptional()).map(i -> {
 			Set<Bundle> set = bundleExports.get(i.getName());
-			if( set == null ) {
+			if (set == null) {
 				set = new HashSet<>();
-				if( ! i.isOptional() && ! i.getName().startsWith("javax") && ! i.getName().equals("org.ietf.jgss") ) {
-					System.err.println("Could not resolve package '"+i.getName()+"' for '"+b.getBundleId()+"' ");
+				if (!i.isOptional() && !i.getName().startsWith("javax") && !i.getName().equals("org.ietf.jgss")) {
+					System.err
+							.println("Could not resolve package '" + i.getName() + "' for '" + b.getBundleId() + "' ");
 				}
 			}
-			return set.stream().map( bb -> new ResolvedBundle(bb, false)).collect(Collectors.toSet());
-		}).flatMap( bs -> bs.stream()).collect(Collectors.toSet()));
+			return set.stream().map(bb -> new ResolvedBundle(bb, false)).collect(Collectors.toSet());
+		}).flatMap(bs -> bs.stream()).collect(Collectors.toSet()));
 
-		rv.addAll(b.getRequiredBundles().stream().filter( i -> !i.isOptional()).map( i -> {
+		rv.addAll(b.getRequiredBundles().stream().filter(i -> !i.isOptional()).map(i -> {
 			List<Bundle> list = bundleById.get(i.getName());
-			if( list == null ) {
+			if (list == null) {
 				list = new ArrayList<>();
-				if( ! i.isOptional() && ! i.getName().equals("system.bundle") && ! i.getName().startsWith("javax") ) {
-					System.err.println("Could not resolve bundle '"+i.getName()+"' for '"+b.getBundleId()+"' ");
+				if (!i.isOptional() && !i.getName().equals("system.bundle") && !i.getName().startsWith("javax")) {
+					System.err.println("Could not resolve bundle '" + i.getName() + "' for '" + b.getBundleId() + "' ");
 				}
 			}
-			return list.stream().map( bb -> new ResolvedBundle(bb, false)).collect(Collectors.toSet());
-		}).flatMap( bs -> bs.stream()).collect(Collectors.toSet()));
+			return list.stream().map(bb -> new ResolvedBundle(bb, false)).collect(Collectors.toSet());
+		}).flatMap(bs -> bs.stream()).collect(Collectors.toSet()));
 
-
-		rv.addAll(b.getImportPackages().stream().filter( i -> i.isOptional()).map( i -> {
+		rv.addAll(b.getImportPackages().stream().filter(i -> i.isOptional()).map(i -> {
 			Set<Bundle> set = bundleExports.get(i.getName());
-			if( set == null ) {
+			if (set == null) {
 				set = new HashSet<>();
-				if( ! i.isOptional() && ! i.getName().startsWith("javax") && ! i.getName().equals("org.ietf.jgss") ) {
-					System.err.println("Could not resolve package '"+i.getName()+"' for '"+b.getBundleId()+"' ");
+				if (!i.isOptional() && !i.getName().startsWith("javax") && !i.getName().equals("org.ietf.jgss")) {
+					System.err
+							.println("Could not resolve package '" + i.getName() + "' for '" + b.getBundleId() + "' ");
 				}
 			}
-			return set.stream().map( bb -> new ResolvedBundle(bb, true)).collect(Collectors.toSet());
-		}).flatMap( bs -> bs.stream()).collect(Collectors.toSet()));
+			return set.stream().map(bb -> new ResolvedBundle(bb, true)).collect(Collectors.toSet());
+		}).flatMap(bs -> bs.stream()).collect(Collectors.toSet()));
 
-		rv.addAll(b.getRequiredBundles().stream().filter( i -> i.isOptional()).map( i -> {
+		rv.addAll(b.getRequiredBundles().stream().filter(i -> i.isOptional()).map(i -> {
 			List<Bundle> list = bundleById.get(i.getName());
-			if( list == null ) {
+			if (list == null) {
 				list = new ArrayList<>();
-				if( ! i.isOptional() && ! i.getName().equals("system.bundle") && ! i.getName().startsWith("javax") ) {
-					System.err.println("Could not resolve bundle '"+i.getName()+"' for '"+b.getBundleId()+"' ");
+				if (!i.isOptional() && !i.getName().equals("system.bundle") && !i.getName().startsWith("javax")) {
+					System.err.println("Could not resolve bundle '" + i.getName() + "' for '" + b.getBundleId() + "' ");
 				}
 			}
-			return list.stream().map( bb -> new ResolvedBundle(bb, true)).collect(Collectors.toSet());
-		}).flatMap( bs -> bs.stream()).collect(Collectors.toSet()));
+			return list.stream().map(bb -> new ResolvedBundle(bb, true)).collect(Collectors.toSet());
+		}).flatMap(bs -> bs.stream()).collect(Collectors.toSet()));
 
-		return rv.stream().filter( rb -> resolvedBundleFilter.test(b, rb)).collect(Collectors.toSet());
+		return rv.stream().filter(rb -> resolvedBundleFilter.test(b, rb)).collect(Collectors.toSet());
 	}
 
 	static String toPomVersion(String version) {
 		String[] parts = version.split("\\.");
-		return parts[0]+"."+parts[1] + "." + parts[2];
+		return parts[0] + "." + parts[1] + "." + parts[2];
 	}
 
 	private void writeLine(OutputStreamWriter w, String v) {
 		try {
-			w.write(v+"\n");
+			w.write(v + "\n");
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
 	private void createPom(Bundle b) {
-		try( FileOutputStream out = new FileOutputStream(new File(new File(workingDirectory,"poms"),b.getBundleId() + ".xml"));
+		try (FileOutputStream out = new FileOutputStream(
+				new File(new File(workingDirectory, "poms"), b.getBundleId() + ".xml"));
 				OutputStreamWriter w = new OutputStreamWriter(out)) {
-			writeLine(w,"<project xmlns=\"http://maven.apache.org/POM/4.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"");
-			writeLine(w,"	xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd\">");
-			writeLine(w,"	<modelVersion>4.0.0</modelVersion>");
-			writeLine(w,"	<groupId>"+groupIdResolver.apply(b)+"</groupId>");
-			writeLine(w,"	<artifactId>"+b.getBundleId()+"</artifactId>");
-			writeLine(w,"	<version>"+toPomVersion(b.getVersion())+ ( snapshotFilter.test(b) ? "-SNAPSHOT" : "" ) + "</version>");
+			writeLine(w,
+					"<project xmlns=\"http://maven.apache.org/POM/4.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"");
+			writeLine(w,
+					"	xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd\">");
+			writeLine(w, "	<modelVersion>4.0.0</modelVersion>");
+			writeLine(w, "	<groupId>" + groupIdResolver.apply(b) + "</groupId>");
+			writeLine(w, "	<artifactId>" + b.getBundleId() + "</artifactId>");
+			writeLine(w, "	<version>" + toPomVersion(b.getVersion()) + (snapshotFilter.test(b) ? "-SNAPSHOT" : "")
+					+ "</version>");
 
 			// Meta-Data
-			writeLine(w,"	<name>"+b.getName()+"</name>");
-			writeLine(w,"	<description>"+b.getName()+"</description>");
-			writeLine(w,"	<url>"+projectUrlResolver.apply(b)+"</url>");
-			writeLine(w,"	<licenses>");
-			licenseResolver.apply(b).forEach( l -> {
-				writeLine(w,"		<license>");
-				writeLine(w,"			<name>"+l.name+"</name>");
-				writeLine(w,"			<url>"+l.url+"</url>");
-				writeLine(w,"		</license>");
+			writeLine(w, "	<name>" + b.getName() + "</name>");
+			writeLine(w, "	<description>" + b.getName() + "</description>");
+			writeLine(w, "	<url>" + projectUrlResolver.apply(b) + "</url>");
+			writeLine(w, "	<licenses>");
+			licenseResolver.apply(b).forEach(l -> {
+				writeLine(w, "		<license>");
+				writeLine(w, "			<name>" + l.name + "</name>");
+				writeLine(w, "			<url>" + l.url + "</url>");
+				writeLine(w, "		</license>");
 			});
 
-			writeLine(w,"	</licenses>");
-			writeLine(w,"	<scm>");
-			writeLine(w,"		<url>"+scmUrlResolver.apply(b).url+"</url>");
-			scmUrlResolver.apply(b).tag.ifPresent( v -> writeLine(w,"		<tag>"+v+"</tag>"));
-			scmUrlResolver.apply(b).connection.ifPresent( v -> writeLine(w,"		<connection>"+v+"</connection>"));
-			writeLine(w,"	</scm>");
-			writeLine(w,"	<developers>");
-			developerResolver.apply(b).forEach( d -> {
-				writeLine(w,"		<developer>");
-				d.url.ifPresent( v -> writeLine(w,"			<url>"+v+"</url>"));
-				d.name.ifPresent( v -> writeLine(w,"			<name>"+v+"</name>"));
-				d.organization.ifPresent( v -> writeLine(w,"			<organization>"+v+"</organization>"));
-//				writeLine(w,"			<roles>");
-//				writeLine(w,"				<role></role>");
-//				writeLine(w,"			</roles>");
-				writeLine(w,"		</developer>");
+			writeLine(w, "	</licenses>");
+			writeLine(w, "	<scm>");
+			writeLine(w, "		<url>" + scmUrlResolver.apply(b).url + "</url>");
+			scmUrlResolver.apply(b).tag.ifPresent(v -> writeLine(w, "		<tag>" + v + "</tag>"));
+			scmUrlResolver.apply(b).connection
+					.ifPresent(v -> writeLine(w, "		<connection>" + v + "</connection>"));
+			writeLine(w, "	</scm>");
+			writeLine(w, "	<developers>");
+			developerResolver.apply(b).forEach(d -> {
+				writeLine(w, "		<developer>");
+				d.url.ifPresent(v -> writeLine(w, "			<url>" + v + "</url>"));
+				d.name.ifPresent(v -> writeLine(w, "			<name>" + v + "</name>"));
+				d.organization.ifPresent(v -> writeLine(w, "			<organization>" + v + "</organization>"));
+				// writeLine(w," <roles>");
+				// writeLine(w," <role></role>");
+				// writeLine(w," </roles>");
+				writeLine(w, "		</developer>");
 			});
 
-			writeLine(w,"	</developers>");
+			writeLine(w, "	</developers>");
 
-			if( ! b.getResolvedBundleDeps().isEmpty() ) {
+			if (!b.getResolvedBundleDeps().isEmpty()) {
 				w.write("	<dependencies>\n");
-				for( ResolvedBundle rd : b.getResolvedBundleDeps() ) {
-					MavenDep dep = mavenReplacementLookup.apply(rd.getBundle()).orElse( new MavenDep( groupIdResolver.apply(rd.getBundle()), rd.getBundle().getBundleId()));
+				for (ResolvedBundle rd : b.getResolvedBundleDeps()) {
+					MavenDep dep = mavenReplacementLookup.apply(rd.getBundle())
+							.orElse(new MavenDep(groupIdResolver.apply(rd.getBundle()), rd.getBundle().getBundleId()));
 					w.write("		<dependency>\n");
-					w.write("			<groupId>"+dep.groupId+"</groupId>\n");
-					w.write("			<artifactId>"+dep.artifactId+"</artifactId>\n");
-					w.write("			<version>"+toPomVersion(rd.getBundle().getVersion())+ ( snapshotFilter.test(rd.getBundle()) ? "-SNAPSHOT" : "" ) +"</version>\n");
-					if( rd.isOptional() ) {
+					w.write("			<groupId>" + dep.groupId + "</groupId>\n");
+					w.write("			<artifactId>" + dep.artifactId + "</artifactId>\n");
+					w.write("			<version>" + toPomVersion(rd.getBundle().getVersion())
+							+ (snapshotFilter.test(rd.getBundle()) ? "-SNAPSHOT" : "") + "</version>\n");
+					if (rd.isOptional()) {
 						w.write("			<optional>true</optional>\n");
 					}
 					w.write("		</dependency>\n");
@@ -351,14 +360,14 @@ public abstract class OsgiToMaven {
 			}
 			w.write("</project>");
 			w.close();
-		} catch( Throwable t ) {
+		} catch (Throwable t) {
 			t.printStackTrace();
 		}
 	}
 
 	private boolean exec(String[] cmdArray, FileOutputStream out) throws Throwable {
-		if( dryRun ) {
-			out.write((Stream.of(cmdArray).collect(Collectors.joining(" "))+"\n").getBytes());
+		if (dryRun) {
+			out.write((Stream.of(cmdArray).collect(Collectors.joining(" ")) + "\n").getBytes());
 			return true;
 		} else {
 			ProcessBuilder b = new ProcessBuilder(cmdArray);
@@ -366,10 +375,11 @@ public abstract class OsgiToMaven {
 			int waitFor = b.start().waitFor();
 			return waitFor == 0;
 		}
-    }
+	}
 
-	private void initMavenIndex() throws PlexusContainerException, ComponentLookupException, ExistingLuceneIndexMismatchException, IllegalArgumentException, IOException {
-		if( this.indexer != null ) {
+	private void initMavenIndex() throws PlexusContainerException, ComponentLookupException,
+			ExistingLuceneIndexMismatchException, IllegalArgumentException, IOException {
+		if (this.indexer != null) {
 			return;
 		}
 
@@ -382,24 +392,22 @@ public abstract class OsgiToMaven {
 		Wagon httpWagon = plexusContainer.lookup(Wagon.class, "http");
 
 		File tempDir = Files.createTempDir();
-		File cache = new File(tempDir,"repo-cache");
-		File index = new File(tempDir,"repo-index");
+		File cache = new File(tempDir, "repo-cache");
+		File index = new File(tempDir, "repo-index");
 
 		List<IndexCreator> indexers = new ArrayList<>();
 		indexers.add(plexusContainer.lookup(IndexCreator.class, "min"));
 		indexers.add(plexusContainer.lookup(IndexCreator.class, "jarContent"));
 		indexers.add(plexusContainer.lookup(IndexCreator.class, "maven-plugin"));
 
-		IndexingContext indexContext = indexer.createIndexingContext("repo-context", "repo", cache,
-				index,
-				repositoryUrl, null, true,
-				true, indexers);
+		IndexingContext indexContext = indexer.createIndexingContext("repo-context", "repo", cache, index,
+				repositoryUrl, null, true, true, indexers);
 
 		ResourceFetcher resourceFetcher = new WagonHelper.WagonFetcher(httpWagon, null, null, null);
 
 		IndexUpdateRequest updateRequest = new IndexUpdateRequest(indexContext, resourceFetcher);
 		IndexUpdateResult updateResult = indexUpdater.fetchAndUpdateIndex(updateRequest);
-		if( ! updateResult.isSuccessful() ) {
+		if (!updateResult.isSuccessful()) {
 			throw new RuntimeException("Failed to update index");
 		}
 
@@ -408,7 +416,8 @@ public abstract class OsgiToMaven {
 	}
 
 	private boolean isAvailable(Bundle bundle) {
-//		System.err.println("SEARCHING " + groupIdResolver.apply(bundle) + ":" + bundle.getBundleId() + ":" + bundle.getVersion());
+		// System.err.println("SEARCHING " + groupIdResolver.apply(bundle) + ":" +
+		// bundle.getBundleId() + ":" + bundle.getVersion());
 		if (dryRun) {
 			return false;
 		}
@@ -416,9 +425,11 @@ public abstract class OsgiToMaven {
 		try {
 			initMavenIndex();
 
-			Query gQuery = indexer.constructQuery(MAVEN.GROUP_ID, new SourcedSearchExpression(groupIdResolver.apply(bundle)));
-			Query aQuery = indexer.constructQuery(MAVEN.ARTIFACT_ID,new SourcedSearchExpression(bundle.getBundleId()));
-			Query vQuery = indexer.constructQuery(MAVEN.VERSION, new SourcedSearchExpression(toPomVersion(bundle.getVersion())));
+			Query gQuery = indexer.constructQuery(MAVEN.GROUP_ID,
+					new SourcedSearchExpression(groupIdResolver.apply(bundle)));
+			Query aQuery = indexer.constructQuery(MAVEN.ARTIFACT_ID, new SourcedSearchExpression(bundle.getBundleId()));
+			Query vQuery = indexer.constructQuery(MAVEN.VERSION,
+					new SourcedSearchExpression(toPomVersion(bundle.getVersion())));
 			Query cQuery = indexer.constructQuery(MAVEN.CLASSIFIER, new SourcedSearchExpression(Field.NOT_PRESENT));
 
 			BooleanQuery bq = new BooleanQuery();
@@ -427,8 +438,8 @@ public abstract class OsgiToMaven {
 			bq.add(vQuery, Occur.MUST);
 			bq.add(cQuery, Occur.MUST_NOT);
 			FlatSearchResponse response = indexer.searchFlat(new FlatSearchRequest(bq, indexContext));
-//			System.err.println("=====> " + response.getResults().size());
-//			System.exit(0);
+			// System.err.println("=====> " + response.getResults().size());
+			// System.exit(0);
 			return response.getResults().size() > 0;
 		} catch (Throwable e) {
 			e.printStackTrace();
@@ -437,110 +448,107 @@ public abstract class OsgiToMaven {
 	}
 
 	private boolean publish(Bundle bundle) throws Throwable {
-		if( ! snapshotFilter.test(bundle) ) {
-			if( isAvailable(bundle) ) {
+		if (!snapshotFilter.test(bundle)) {
+			if (isAvailable(bundle)) {
 				System.out.println("	Skipping '" + bundle.getBundleId() + "' because it is already uploaded");
 				return true;
 			}
 		}
 
-		System.out.print("	Publishing " + bundle.getBundleId() + " ... " );
-    	FileOutputStream out = new FileOutputStream(new File(workingDirectory,"publish.sh"), true);
-    	out.write(("\n\necho 'Publishing "+bundle.getBundleId()+"'\n\n").getBytes());
+		System.out.print("	Publishing " + bundle.getBundleId() + " ... ");
+		FileOutputStream out = new FileOutputStream(new File(workingDirectory, "publish.sh"), true);
+		out.write(("\n\necho 'Publishing " + bundle.getBundleId() + "'\n\n").getBytes());
 
-    	String javadocDirectory = new File(workingDirectory,"javadoc_"+Thread.currentThread().getName()).getAbsolutePath();
-    	String sourceDirectory = new File(workingDirectory,"source_"+Thread.currentThread().getName()).getAbsolutePath();
-    	String javaDocJar = new File(workingDirectory,"javadoc_"+Thread.currentThread().getName()+".jar").getAbsolutePath();
+		String javadocDirectory = new File(workingDirectory, "javadoc_" + Thread.currentThread().getName())
+				.getAbsolutePath();
+		String sourceDirectory = new File(workingDirectory, "source_" + Thread.currentThread().getName())
+				.getAbsolutePath();
+		String javaDocJar = new File(workingDirectory, "javadoc_" + Thread.currentThread().getName() + ".jar")
+				.getAbsolutePath();
 
-    	exec(new String[] { "rm", "-rf", javadocDirectory },out);
-    	exec(new String[] { "rm", "-rf", sourceDirectory },out);
-    	exec(new String[] { "rm", "-f", javaDocJar},out);
-		exec(new String[] { "mkdir", javadocDirectory },out);
-		exec(new String[] { "unzip", "-d", sourceDirectory, new File(workingDirectory,bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").getAbsolutePath() }, out);
-		exec(new String[] { "javadoc", "-d", javadocDirectory, "-sourcepath", sourceDirectory, "-subpackages", "."}, out);
+		exec(new String[] { "rm", "-rf", javadocDirectory }, out);
+		exec(new String[] { "rm", "-rf", sourceDirectory }, out);
+		exec(new String[] { "rm", "-f", javaDocJar }, out);
+		exec(new String[] { "mkdir", javadocDirectory }, out);
+		exec(new String[] { "unzip", "-d", sourceDirectory,
+				new File(workingDirectory, bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar")
+						.getAbsolutePath() },
+				out);
+		exec(new String[] { "javadoc", "-d", javadocDirectory, "-sourcepath", sourceDirectory, "-subpackages", "." },
+				out);
 
-		exec(new String[] { "jar", "cf", javaDocJar, "-C", javadocDirectory+"/", "." },out);
-    	boolean rv = exec( new String[] {
-			"mvn",
-			"gpg:sign-and-deploy-file",
-			"-Durl="+repositoryUrl,
-			"-DrepositoryId="+repositoryId,
-			"-DpomFile="+new File(workingDirectory,"/poms/"+bundle.getBundleId()+".xml").getAbsolutePath(),
-			"-Dfile=" + new File(workingDirectory,bundle.getBundleId() + "_" + bundle.getVersion() + ".jar").getAbsolutePath()
-    	},out);
-    	if( ! rv ) {
-    		System.err.println("Failed to publish binary artifact - '"+bundle.getBundleId()+"'");
-    		return false;
-    	}
+		exec(new String[] { "jar", "cf", javaDocJar, "-C", javadocDirectory + "/", "." }, out);
+		boolean rv = exec(new String[] { "mvn", "gpg:sign-and-deploy-file", "-Durl=" + repositoryUrl,
+				"-DrepositoryId=" + repositoryId,
+				"-DpomFile=" + new File(workingDirectory, "/poms/" + bundle.getBundleId() + ".xml").getAbsolutePath(),
+				"-Dfile=" + new File(workingDirectory, bundle.getBundleId() + "_" + bundle.getVersion() + ".jar")
+						.getAbsolutePath() },
+				out);
+		if (!rv) {
+			System.err.println("Failed to publish binary artifact - '" + bundle.getBundleId() + "'");
+			return false;
+		}
 
-    	if( new File(workingDirectory,bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").exists() ) {
-        	rv = exec( new String[] {
-        			"mvn",
-        			"gpg:sign-and-deploy-file",
-        			"-Durl="+repositoryUrl,
-        			"-DrepositoryId="+repositoryId,
-        			"-DpomFile="+new File(workingDirectory,"/poms/"+bundle.getBundleId()+".xml").getAbsolutePath(),
-        			"-Dfile=" + new File(workingDirectory,bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").getAbsolutePath(),
-        			"-Dclassifier=sources"
-            	},out);
+		if (new File(workingDirectory, bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").exists()) {
+			rv = exec(new String[] { "mvn", "gpg:sign-and-deploy-file", "-Durl=" + repositoryUrl,
+					"-DrepositoryId=" + repositoryId,
+					"-DpomFile="
+							+ new File(workingDirectory, "/poms/" + bundle.getBundleId() + ".xml").getAbsolutePath(),
+					"-Dfile=" + new File(workingDirectory,
+							bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").getAbsolutePath(),
+					"-Dclassifier=sources" }, out);
 
-        	if( ! rv ) {
-        		System.err.println("ERROR: Failed to publish source artifact - '"+bundle.getBundleId()+"'");
-        		return false;
-        	}
+			if (!rv) {
+				System.err.println("ERROR: Failed to publish source artifact - '" + bundle.getBundleId() + "'");
+				return false;
+			}
 
-        	rv = exec( new String[] {
-    				"mvn",
-    				"gpg:sign-and-deploy-file",
-    				"-Durl="+repositoryUrl,
-    				"-DrepositoryId="+repositoryId,
-    				"-DpomFile="+new File(workingDirectory,"/poms/"+bundle.getBundleId()+".xml").getAbsolutePath(),
-    				"-Dfile="+javaDocJar,
-    				"-Dclassifier=javadoc"
-    	    	},out);
+			rv = exec(new String[] { "mvn", "gpg:sign-and-deploy-file", "-Durl=" + repositoryUrl,
+					"-DrepositoryId=" + repositoryId,
+					"-DpomFile="
+							+ new File(workingDirectory, "/poms/" + bundle.getBundleId() + ".xml").getAbsolutePath(),
+					"-Dfile=" + javaDocJar, "-Dclassifier=javadoc" }, out);
 
-	    	if( ! rv ) {
-	    		System.err.println("ERROR: Failed to publish javadoc artifact - '"+bundle.getBundleId()+"'");
-	    		return false;
-	    	}
-    	} else {
-    		System.err.println("ERROR: No source jar available");
-    		if( sourceEnforced.test(bundle) ) {
-    			return false;
-    		}
-    	}
+			if (!rv) {
+				System.err.println("ERROR: Failed to publish javadoc artifact - '" + bundle.getBundleId() + "'");
+				return false;
+			}
+		} else {
+			System.err.println("ERROR: No source jar available");
+			if (sourceEnforced.test(bundle)) {
+				return false;
+			}
+		}
 
-    	exec(new String[] { "rm", "-rf", javadocDirectory },out);
-    	exec(new String[] { "rm", "-rf", sourceDirectory },out);
-    	exec(new String[] { "rm", "-f", javaDocJar},out);
+		exec(new String[] { "rm", "-rf", javadocDirectory }, out);
+		exec(new String[] { "rm", "-rf", sourceDirectory }, out);
+		exec(new String[] { "rm", "-f", javaDocJar }, out);
 
-    	out.close();
-    	System.out.println("done");
+		out.close();
+		System.out.println("done");
 
-    	return true;
-    }
+		return true;
+	}
 
 	private Predicate<Bundle> generatePoms(List<Bundle> bundleList) {
-		bundleById = bundleList.stream().collect(Collectors.groupingBy( b -> b.getBundleId()));
-		bundleExports = bundleList.stream().flatMap( i -> i.getExportPackages().stream()).collect(Collectors.groupingBy(e -> e.getName(), Collectors.mapping( e -> e.getBundle(), Collectors.toSet())));
+		bundleById = bundleList.stream().collect(Collectors.groupingBy(b -> b.getBundleId()));
+		bundleExports = bundleList.stream().flatMap(i -> i.getExportPackages().stream()).collect(
+				Collectors.groupingBy(e -> e.getName(), Collectors.mapping(e -> e.getBundle(), Collectors.toSet())));
 
 		System.out.print("Resolving bundles ...");
 
-		bundleList.stream().filter(bundleFilter).forEach( b -> b.resolve(this::resolve));
+		bundleList.stream().filter(bundleFilter).forEach(b -> b.resolve(this::resolve));
 
 		System.out.println("done");
 
 		System.out.print("Generated pom.xml files ...");
 
-		Predicate<Bundle> publishFilter = b ->
-			bundleById.containsKey( b.getBundleId() + ".source" ) || ! sourceEnforced.test(b); // only publish stuff we have the source available
+		Predicate<Bundle> publishFilter = b -> bundleById.containsKey(b.getBundleId() + ".source")
+				|| !sourceEnforced.test(b); // only publish stuff we have the source available
 
-		publishFilter = this.publishFilter.and(publishFilter).and( b -> ! mavenReplacementLookup.apply(b).isPresent() );
+		publishFilter = this.publishFilter.and(publishFilter).and(b -> !mavenReplacementLookup.apply(b).isPresent());
 
-		bundleList.stream()
-			.filter(bundleFilter)
-			.filter(publishFilter)
-			.forEach(this::createPom);
+		bundleList.stream().filter(bundleFilter).filter(publishFilter).forEach(this::createPom);
 
 		System.out.println("done");
 		return publishFilter;
@@ -548,13 +556,13 @@ public abstract class OsgiToMaven {
 
 	public void publish() throws Throwable {
 		ExecutorService executorService = Executors.newFixedThreadPool(PUBLISHING_THREADS, r -> {
-			Thread thread = new Thread(r, "publish_"+counter.incrementAndGet());
+			Thread thread = new Thread(r, "publish_" + counter.incrementAndGet());
 			return thread;
 		});
 
 		FileUtils.deleteDirectory(workingDirectory);
-		new File(workingDirectory,"poms").mkdirs();
-		new File(workingDirectory,"m2-repo").mkdirs();
+		new File(workingDirectory, "poms").mkdirs();
+		new File(workingDirectory, "m2-repo").mkdirs();
 
 		List<Bundle> bundleList = generateBundleList();
 
@@ -562,12 +570,12 @@ public abstract class OsgiToMaven {
 
 		System.out.println("Publishing bundles ...");
 		AtomicBoolean failure = new AtomicBoolean();
-		bundleList.stream().filter(bundleFilter)
-			.filter(publishFilter) // only publish stuff we have the source available
-			.forEach( b -> {
-					executorService.execute( () -> {
+		bundleList.stream().filter(bundleFilter).filter(publishFilter) // only publish stuff we have the source
+																		// available
+				.forEach(b -> {
+					executorService.execute(() -> {
 						try {
-							if( ! publish(b) ) {
+							if (!publish(b)) {
 								failure.set(true);
 							}
 						} catch (Throwable e) {
@@ -575,43 +583,42 @@ public abstract class OsgiToMaven {
 							failure.set(true);
 						}
 					});
-			});
+				});
 		executorService.shutdown();
-		if( executorService.awaitTermination(4, TimeUnit.HOURS) ) {
+		if (executorService.awaitTermination(4, TimeUnit.HOURS)) {
 			System.out.println("done");
 		} else {
 			System.out.println("Publishing took too long killing it");
 			executorService.shutdownNow();
 		}
-		
-		if( failure.get() ) {
+
+		if (failure.get()) {
 			System.out.println("Failed to publish all bundles. Exiting ...");
 			System.exit(1);
 		}
-
 
 		FileUtils.deleteDirectory(workingDirectory);
 	}
 
 	public void validate() throws Throwable {
 		FileUtils.deleteDirectory(workingDirectory);
-		new File(workingDirectory,"poms").mkdirs();
-		new File(workingDirectory,"m2-repo").mkdirs();
+		new File(workingDirectory, "poms").mkdirs();
+		new File(workingDirectory, "m2-repo").mkdirs();
 
 		List<Bundle> bundleList = generateBundleList();
 		Predicate<Bundle> publishFilter = generatePoms(bundleList);
 
 		System.out.print("Validation bundles ...");
-		List<Bundle> failures = bundleList.stream().filter(bundleFilter)
-			.filter(publishFilter) // only publish stuff we have the source available
-			.filter( ((Predicate<Bundle>)this::validate).negate() )
-			.collect(Collectors.toList());
+		List<Bundle> failures = bundleList.stream().filter(bundleFilter).filter(publishFilter) // only publish stuff we
+																								// have the source
+																								// available
+				.filter(((Predicate<Bundle>) this::validate).negate()).collect(Collectors.toList());
 
-		if( failures.isEmpty() ) {
+		if (failures.isEmpty()) {
 			System.out.println("done");
 		} else {
 			System.out.println();
-			failures.forEach( b -> System.out.println("Resolve failure for '"+b.getBundleId()+"'"));
+			failures.forEach(b -> System.out.println("Resolve failure for '" + b.getBundleId() + "'"));
 		}
 
 		FileUtils.deleteDirectory(workingDirectory);
@@ -619,15 +626,11 @@ public abstract class OsgiToMaven {
 
 	private boolean validate(Bundle bundle) {
 		try {
-			FileOutputStream out = new FileOutputStream(new File(workingDirectory,"validate.sh"), true);
-			return exec(new String[] {
-					"mvn",
-					"dependency:tree",
-					"-f",
-					new File(workingDirectory,"/poms/"+bundle.getBundleId()+".xml").getAbsolutePath(),
-					"-Posgi-validate"
-			}, out);
-		} catch( Throwable t ) {
+			FileOutputStream out = new FileOutputStream(new File(workingDirectory, "validate.sh"), true);
+			return exec(new String[] { "mvn", "dependency:tree", "-f",
+					new File(workingDirectory, "/poms/" + bundle.getBundleId() + ".xml").getAbsolutePath(),
+					"-Posgi-validate" }, out);
+		} catch (Throwable t) {
 
 		}
 		return false;
