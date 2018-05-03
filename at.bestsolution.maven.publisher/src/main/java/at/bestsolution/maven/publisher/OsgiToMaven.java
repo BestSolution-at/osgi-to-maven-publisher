@@ -172,6 +172,10 @@ public abstract class OsgiToMaven {
 	public void setSnapshotFilter(Predicate<Bundle> snapshotFilter) {
 		this.snapshotFilter = snapshotFilter;
 	}
+	
+	public void setFeatureSnapshotFilter(Predicate<Feature> featureSnapshotFilter) {
+		this.featureSnapshotFilter = featureSnapshotFilter;
+	}
 
 	public void setResolvedBundleFilter(BiPredicate<Bundle, ResolvedBundle> resolvedBundleFilter) {
 		this.resolvedBundleFilter = resolvedBundleFilter;
