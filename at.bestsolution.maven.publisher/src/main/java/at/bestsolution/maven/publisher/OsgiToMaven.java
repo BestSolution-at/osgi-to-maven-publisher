@@ -82,6 +82,7 @@ public abstract class OsgiToMaven {
 	private Map<String, List<Bundle>> bundleById;
 	private Function<Bundle, Optional<MavenDep>> mavenReplacementLookup = b -> Optional.empty();
 	private Predicate<Bundle> publishFilter = b -> true;
+	private Predicate<Feature> featurePublishFilter = f -> true;
 	private Predicate<Bundle> bundleFilter = b -> true;
 	private Predicate<Feature> featureFilter = b -> true;
 	private Predicate<Bundle> snapshotFilter = b -> false;
@@ -147,6 +148,10 @@ public abstract class OsgiToMaven {
 
 	public void setPublishFilter(Predicate<Bundle> publishFilter) {
 		this.publishFilter = publishFilter;
+	}
+	
+	public void setFeaturePublishFilter(Predicate<Feature> featurePublishFilter) {
+		this.featurePublishFilter = featurePublishFilter;
 	}
 
 	public void setBundleFilter(Predicate<Bundle> bundleFilter) {
@@ -758,7 +763,7 @@ public abstract class OsgiToMaven {
 		publishFilter = this.publishFilter.and(publishFilter).and(b -> !mavenReplacementLookup.apply(b).isPresent());
 
 		bundleList.stream().filter(bundleFilter).filter(publishFilter).forEach(this::createPom);
-		featureList.stream().filter(featureFilter).forEach(this::createPom);
+		featureList.stream().filter(featureFilter).filter(featurePublishFilter).forEach(this::createPom);
 
 		System.out.println("done");
 		return publishFilter;
