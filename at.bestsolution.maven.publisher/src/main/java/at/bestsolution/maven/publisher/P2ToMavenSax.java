@@ -55,6 +55,71 @@ public class P2ToMavenSax extends OsgiToMaven {
 		return dh.bundles;
 	}
 
+	@Override
+	public List<Feature> generateFeatureList() throws Throwable {
+		unzipRepository(new File(indexZip), workingDirectory);
+		unzipRepository(new File(workingDirectory, "content.jar"), workingDirectory);
+		FileUtils.copyDirectory(new File(workingDirectory, "features"), workingDirectory);
+
+		SAXParserFactory instance = SAXParserFactory.newInstance();
+		SAXParser parser = instance.newSAXParser();
+		FeatureSaxHandlerImpl dh = new FeatureSaxHandlerImpl();
+		parser.parse(new FileInputStream(new File(workingDirectory, "content.xml")), dh);
+
+		// TODO Auto-generated method stub
+		return dh.features;
+	}
+
+	static class FeatureSaxHandlerImpl extends DefaultHandler {
+		private Feature currentFeature;
+		private List<Feature> features = new ArrayList<>();
+		private boolean inRequires;
+
+		@Override
+		public void startElement(String uri, String localName, String qName, Attributes attributes)
+				throws SAXException {
+			if (qName.equals("unit") && attributes.getValue("id").endsWith("feature.group")) {
+				currentFeature = new Feature();
+				String value = attributes.getValue("id");
+				currentFeature.setFeatureId(value.substring(0, value.length() - "feature.group".length() - 1));
+				currentFeature.setVersion(attributes.getValue("version"));
+				features.add(currentFeature);
+			} else if (currentFeature != null && qName.equals("property")) {
+				if ("org.eclipse.equinox.p2.provider".equals(attributes.getValue("name"))) {
+					currentFeature.setVendor(attributes.getValue("value"));
+				} else if ("org.eclipse.equinox.p2.name".equals(attributes.getValue("name"))) {
+					currentFeature.setName(attributes.getValue("value"));
+				}
+			} else if( currentFeature != null && qName.equals("requires") ) {
+				inRequires = true;
+			} else if( inRequires && qName.equals("required") ) {
+				String value = attributes.getValue("name");
+				if( value.endsWith("feature.jar") ) {
+					return;
+				}
+				
+				if( value.endsWith("feature.group") ) {
+					Feature f = new Feature();
+					f.setFeatureId(value.substring(0, value.length() - "feature.group".length() - 1));
+					currentFeature.getFeatures().add(f);
+				} else {
+					RequireBundle requireBundle = new RequireBundle();
+					requireBundle.setName(value);
+					currentFeature.getBundles().add(requireBundle);
+				}
+			}
+		}
+		
+		@Override
+		public void endElement(String uri, String localName, String qName) throws SAXException {
+			if (qName.equals("unit") ) {
+				currentFeature = null;
+			} else if( qName.equals("requires") ) {
+				inRequires = false;
+			}
+		}
+	}
+
 	static class SaxHandlerImpl extends DefaultHandler {
 		private Bundle currentBundle;
 		private List<Bundle> bundles = new ArrayList<>();

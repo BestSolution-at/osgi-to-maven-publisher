@@ -83,13 +83,25 @@ public abstract class OsgiToMaven {
 	private Function<Bundle, Optional<MavenDep>> mavenReplacementLookup = b -> Optional.empty();
 	private Predicate<Bundle> publishFilter = b -> true;
 	private Predicate<Bundle> bundleFilter = b -> true;
+	private Predicate<Feature> featureFilter = b -> true;
 	private Predicate<Bundle> snapshotFilter = b -> false;
+	private Predicate<Feature> featureSnapshotFilter = b -> false;
 	private Predicate<Bundle> sourceEnforced = b -> true;
 	private Function<Bundle, String> projectUrlResolver = b -> "https://projects.eclipse.org/";
+	private Function<Feature, String> featureProjectUrlResolver = b -> "https://projects.eclipse.org/";
 	private Function<Bundle, String> groupIdResolver = b -> "osgi.to.maven";
+	private Function<Feature, String> featureGroupIdResolver = b -> "osgi.to.maven";
 	private Function<Bundle, SCM> scmUrlResolver = b -> new SCM("http://git.eclipse.org/c/", null, null);
+	private Function<Feature, SCM> featureScmUrlResolver = b -> new SCM("http://git.eclipse.org/c/", null, null);
 	private Function<Bundle, List<Developer>> developerResolver = b -> {
 		if (b.getBundleId().startsWith("org.eclipse")) {
+			return Collections.singletonList(new Developer("https://projects.eclipse.org/", null, null));
+		} else {
+			return Collections.emptyList();
+		}
+	};
+	private Function<Feature, List<Developer>> featureDeveloperResolver = b -> {
+		if (b.getFeatureId().startsWith("org.eclipse")) {
 			return Collections.singletonList(new Developer("https://projects.eclipse.org/", null, null));
 		} else {
 			return Collections.emptyList();
@@ -106,14 +118,28 @@ public abstract class OsgiToMaven {
 			return Collections.emptyList();
 		}
 	};
+	private Function<Feature, List<License>> featureLicenseResolver = b -> {
+		if (b.getFeatureId().startsWith("org.eclipse")) {
+			return Collections.singletonList(
+					new License("Eclipse Public License 1.0", "http://www.eclipse.org/legal/epl-v10.html"));
+		} else if (b.getFeatureId().startsWith("org.apache")) {
+			return Collections.singletonList(
+					new License("Apache License, Version 2.0", "https://www.apache.org/licenses/LICENSE-2.0.txt"));
+		} else {
+			return Collections.emptyList();
+		}
+	};
 	private BiPredicate<Bundle, ResolvedBundle> resolvedBundleFilter = (b, rb) -> true;
 	private final String repositoryId;
 	private final String repositoryUrl;
-	private boolean dryRun = false;
 	private static final int PUBLISHING_THREADS = 1;
 	private Indexer indexer;
 	private IndexingContext indexContext;
+	private Map<Object, List<Feature>> featureById;
 	private static AtomicInteger counter = new AtomicInteger();
+
+	private boolean dryRun = false;
+	private boolean keepGenFolder = dryRun;
 
 	public void setMavenReplacementLookup(Function<Bundle, Optional<MavenDep>> mavenReplacementLookup) {
 		this.mavenReplacementLookup = mavenReplacementLookup;
@@ -137,6 +163,10 @@ public abstract class OsgiToMaven {
 
 	public void setGroupIdResolver(Function<Bundle, String> groupIdResolver) {
 		this.groupIdResolver = groupIdResolver;
+	}
+
+	public void setFeatureGroupIdResolver(Function<Feature, String> featureGroupIdResolver) {
+		this.featureGroupIdResolver = featureGroupIdResolver;
 	}
 
 	public void setSnapshotFilter(Predicate<Bundle> snapshotFilter) {
@@ -228,6 +258,29 @@ public abstract class OsgiToMaven {
 
 	private static void createDir(File dir) {
 		dir.mkdirs();
+	}
+
+	private Set<ResolvedBundle> resolveFeatureBundles(Feature f) {
+		Set<ResolvedBundle> rv = new HashSet<ResolvedBundle>();
+		rv.addAll(f.getBundles().stream().filter(i -> !i.isOptional()).map(i -> {
+			List<Bundle> list = bundleById.get(i.getName());
+			if (list == null) {
+				list = new ArrayList<>();
+				if (!i.isOptional() && !i.getName().equals("system.bundle") && !i.getName().startsWith("javax")) {
+					System.err
+							.println("Could not resolve bundle '" + i.getName() + "' for '" + f.getFeatureId() + "' ");
+				}
+			}
+			return list.stream().map(bb -> new ResolvedBundle(bb, false)).collect(Collectors.toSet());
+		}).flatMap(bs -> bs.stream()).collect(Collectors.toSet()));
+		return rv;
+	}
+
+	private Set<Feature> resolveFeatureFeatures(Feature f) {
+		Set<Feature> rv = new HashSet<>();
+		rv.addAll(f.getFeatures().stream().map(i -> featureById.get(i.getFeatureId())).flatMap(fs -> fs.stream())
+				.collect(Collectors.toSet()));
+		return rv;
 	}
 
 	private Set<ResolvedBundle> resolve(Bundle b) {
@@ -365,6 +418,89 @@ public abstract class OsgiToMaven {
 		}
 	}
 
+	private void createPom(Feature f) {
+		try (FileOutputStream out = new FileOutputStream(
+				new File(new File(workingDirectory, "poms"), "feature_" + f.getFeatureId() + ".xml"));
+				OutputStreamWriter w = new OutputStreamWriter(out)) {
+			writeLine(w,
+					"<project xmlns=\"http://maven.apache.org/POM/4.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"");
+			writeLine(w,
+					"	xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd\">");
+			writeLine(w, "	<modelVersion>4.0.0</modelVersion>");
+			writeLine(w, "	<groupId>" + featureGroupIdResolver.apply(f) + "</groupId>");
+			writeLine(w, "	<artifactId>" + f.getFeatureId() + "</artifactId>");
+			writeLine(w, "	<version>" + toPomVersion(f.getVersion())
+					+ (featureSnapshotFilter.test(f) ? "-SNAPSHOT" : "") + "</version>");
+
+			// Meta-Data
+			writeLine(w, "	<name>" + f.getName() + "</name>");
+			writeLine(w, "	<description>" + f.getName() + "</description>");
+			writeLine(w, "	<url>" + featureProjectUrlResolver.apply(f) + "</url>");
+			writeLine(w, "	<licenses>");
+			featureLicenseResolver.apply(f).forEach(l -> {
+				writeLine(w, "		<license>");
+				writeLine(w, "			<name>" + l.name + "</name>");
+				writeLine(w, "			<url>" + l.url + "</url>");
+				writeLine(w, "		</license>");
+			});
+
+			writeLine(w, "	</licenses>");
+			writeLine(w, "	<scm>");
+			writeLine(w, "		<url>" + featureScmUrlResolver.apply(f).url + "</url>");
+			featureScmUrlResolver.apply(f).tag.ifPresent(v -> writeLine(w, "		<tag>" + v + "</tag>"));
+			featureScmUrlResolver.apply(f).connection
+					.ifPresent(v -> writeLine(w, "		<connection>" + v + "</connection>"));
+			writeLine(w, "	</scm>");
+			writeLine(w, "	<developers>");
+			featureDeveloperResolver.apply(f).forEach(d -> {
+				writeLine(w, "		<developer>");
+				d.url.ifPresent(v -> writeLine(w, "			<url>" + v + "</url>"));
+				d.name.ifPresent(v -> writeLine(w, "			<name>" + v + "</name>"));
+				d.organization.ifPresent(v -> writeLine(w, "			<organization>" + v + "</organization>"));
+				// writeLine(w," <roles>");
+				// writeLine(w," <role></role>");
+				// writeLine(w," </roles>");
+				writeLine(w, "		</developer>");
+			});
+
+			writeLine(w, "	</developers>");
+
+			if (!f.getResolvedBundleDeps().isEmpty() || !f.getResolvedFeatures().isEmpty()) {
+				w.write("	<dependencies>\n");
+				for (ResolvedBundle rd : f.getResolvedBundleDeps()) {
+					MavenDep dep = mavenReplacementLookup.apply(rd.getBundle())
+							.orElse(new MavenDep(groupIdResolver.apply(rd.getBundle()), rd.getBundle().getBundleId()));
+					w.write("		<dependency>\n");
+					w.write("			<groupId>" + dep.groupId + "</groupId>\n");
+					w.write("			<artifactId>" + dep.artifactId + "</artifactId>\n");
+					w.write("			<version>" + toPomVersion(rd.getBundle().getVersion())
+							+ (snapshotFilter.test(rd.getBundle()) ? "-SNAPSHOT" : "") + "</version>\n");
+					if (rd.isOptional()) {
+						w.write("			<optional>true</optional>\n");
+					}
+					w.write("		</dependency>\n");
+				}
+				if (!f.getResolvedFeatures().isEmpty()) {
+					w.write("		<!-- Features -->\n");
+					for (Feature rf : f.getResolvedFeatures()) {
+						MavenDep dep = new MavenDep(featureGroupIdResolver.apply(rf), rf.getFeatureId());
+						w.write("		<dependency>\n");
+						w.write("			<groupId>" + dep.groupId + "</groupId>\n");
+						w.write("			<artifactId>" + dep.artifactId + "</artifactId>\n");
+						w.write("			<version>" + toPomVersion(rf.getVersion())
+								+ (featureSnapshotFilter.test(rf) ? "-SNAPSHOT" : "") + "</version>\n");
+						w.write("		</dependency>\n");
+					}
+				}
+				w.write("	</dependencies>\n");
+			}
+			w.write("</project>");
+			w.close();
+		} catch (Throwable t) {
+			t.printStackTrace();
+		}
+	}
+
 	private boolean exec(String[] cmdArray, FileOutputStream out) throws Throwable {
 		if (dryRun) {
 			out.write((Stream.of(cmdArray).collect(Collectors.joining(" ")) + "\n").getBytes());
@@ -445,6 +581,67 @@ public abstract class OsgiToMaven {
 			e.printStackTrace();
 			return false;
 		}
+	}
+
+	private boolean isAvailable(Feature feature) {
+		// System.err.println("SEARCHING " + groupIdResolver.apply(bundle) + ":" +
+		// bundle.getBundleId() + ":" + bundle.getVersion());
+		if (dryRun) {
+			return false;
+		}
+
+		try {
+			initMavenIndex();
+
+			Query gQuery = indexer.constructQuery(MAVEN.GROUP_ID,
+					new SourcedSearchExpression(featureGroupIdResolver.apply(feature)));
+			Query aQuery = indexer.constructQuery(MAVEN.ARTIFACT_ID,
+					new SourcedSearchExpression(feature.getFeatureId()));
+			Query vQuery = indexer.constructQuery(MAVEN.VERSION,
+					new SourcedSearchExpression(toPomVersion(feature.getVersion())));
+			Query cQuery = indexer.constructQuery(MAVEN.CLASSIFIER, new SourcedSearchExpression(Field.NOT_PRESENT));
+
+			BooleanQuery bq = new BooleanQuery();
+			bq.add(gQuery, Occur.MUST);
+			bq.add(aQuery, Occur.MUST);
+			bq.add(vQuery, Occur.MUST);
+			bq.add(cQuery, Occur.MUST_NOT);
+			FlatSearchResponse response = indexer.searchFlat(new FlatSearchRequest(bq, indexContext));
+			// System.err.println("=====> " + response.getResults().size());
+			// System.exit(0);
+			return response.getResults().size() > 0;
+		} catch (Throwable e) {
+			e.printStackTrace();
+			return false;
+		}
+	}
+
+	private boolean publish(Feature feature) throws Throwable {
+		if (!featureSnapshotFilter.test(feature)) {
+			if (isAvailable(feature)) {
+				System.out.println("	Skipping '" + feature.getFeatureId() + "' because it is already uploaded");
+				return true;
+			}
+		}
+
+		System.out.print("	Publishing " + feature.getFeatureId() + " ... ");
+		FileOutputStream out = new FileOutputStream(new File(workingDirectory, "publish.sh"), true);
+		out.write(("\n\necho 'Publishing " + feature.getFeatureId() + "'\n\n").getBytes());
+
+		boolean rv = exec(new String[] { "mvn", "gpg:sign-and-deploy-file", "-Durl=" + repositoryUrl,
+				"-DrepositoryId=" + repositoryId,
+				"-DpomFile=" + new File(workingDirectory, "/poms/feature_" + feature.getFeatureId() + ".xml")
+						.getAbsolutePath(),
+				"-Dfile=" + new File(workingDirectory, feature.getFeatureId() + "_" + feature.getVersion() + ".jar")
+						.getAbsolutePath() },
+				out);
+		if (!rv) {
+			System.err.println("Failed to publish binary artifact - '" + feature.getFeatureId() + "'");
+			return false;
+		}
+		out.close();
+		System.out.println("done");
+		return true;
 	}
 
 	private boolean publish(Bundle bundle) throws Throwable {
@@ -530,14 +727,22 @@ public abstract class OsgiToMaven {
 		return true;
 	}
 
-	private Predicate<Bundle> generatePoms(List<Bundle> bundleList) {
+	private Predicate<Bundle> generatePoms(List<Bundle> bundleList, List<Feature> featureList) {
 		bundleById = bundleList.stream().collect(Collectors.groupingBy(b -> b.getBundleId()));
+		featureById = featureList.stream().collect(Collectors.groupingBy(f -> f.getFeatureId()));
 		bundleExports = bundleList.stream().flatMap(i -> i.getExportPackages().stream()).collect(
 				Collectors.groupingBy(e -> e.getName(), Collectors.mapping(e -> e.getBundle(), Collectors.toSet())));
 
 		System.out.print("Resolving bundles ...");
 
 		bundleList.stream().filter(bundleFilter).forEach(b -> b.resolve(this::resolve));
+
+		System.out.println("done");
+
+		System.out.print("Resolving features ...");
+
+		featureList.stream().filter(featureFilter).forEach(f -> f.resolveBundles(this::resolveFeatureBundles));
+		featureList.stream().filter(featureFilter).forEach(f -> f.resolveFeatures(this::resolveFeatureFeatures));
 
 		System.out.println("done");
 
@@ -549,6 +754,7 @@ public abstract class OsgiToMaven {
 		publishFilter = this.publishFilter.and(publishFilter).and(b -> !mavenReplacementLookup.apply(b).isPresent());
 
 		bundleList.stream().filter(bundleFilter).filter(publishFilter).forEach(this::createPom);
+		featureList.stream().filter(featureFilter).forEach(this::createPom);
 
 		System.out.println("done");
 		return publishFilter;
@@ -565,13 +771,28 @@ public abstract class OsgiToMaven {
 		new File(workingDirectory, "m2-repo").mkdirs();
 
 		List<Bundle> bundleList = generateBundleList();
+		List<Feature> featureList = generateFeatureList();
 
-		Predicate<Bundle> publishFilter = generatePoms(bundleList);
+		Predicate<Bundle> publishFilter = generatePoms(bundleList, featureList);
 
 		System.out.println("Publishing bundles ...");
 		AtomicBoolean failure = new AtomicBoolean();
 		bundleList.stream().filter(bundleFilter).filter(publishFilter) // only publish stuff we have the source
 																		// available
+				.forEach(b -> {
+					executorService.execute(() -> {
+						try {
+							if (!publish(b)) {
+								failure.set(true);
+							}
+						} catch (Throwable e) {
+							e.printStackTrace();
+							failure.set(true);
+						}
+					});
+				});
+		featureList.stream().filter(featureFilter) // only publish stuff we have the source
+				// available
 				.forEach(b -> {
 					executorService.execute(() -> {
 						try {
@@ -597,31 +818,55 @@ public abstract class OsgiToMaven {
 			System.exit(1);
 		}
 
-		FileUtils.deleteDirectory(workingDirectory);
+		if (!keepGenFolder) {
+			FileUtils.deleteDirectory(workingDirectory);
+		}
 	}
 
 	public void validate() throws Throwable {
-		FileUtils.deleteDirectory(workingDirectory);
+		if (!keepGenFolder) {
+			FileUtils.deleteDirectory(workingDirectory);
+		}
+		
 		new File(workingDirectory, "poms").mkdirs();
 		new File(workingDirectory, "m2-repo").mkdirs();
 
 		List<Bundle> bundleList = generateBundleList();
-		Predicate<Bundle> publishFilter = generatePoms(bundleList);
+		List<Feature> featureList = generateFeatureList();
+		Predicate<Bundle> publishFilter = generatePoms(bundleList, featureList);
 
 		System.out.print("Validation bundles ...");
-		List<Bundle> failures = bundleList.stream().filter(bundleFilter).filter(publishFilter) // only publish stuff we
-																								// have the source
-																								// available
-				.filter(((Predicate<Bundle>) this::validate).negate()).collect(Collectors.toList());
+		{
+			List<Bundle> failures = bundleList.stream().filter(bundleFilter).filter(publishFilter) // only publish stuff
+																									// we
+					// have the source
+					// available
+					.filter(((Predicate<Bundle>) this::validate).negate()).collect(Collectors.toList());
+
+			if (failures.isEmpty()) {
+				System.out.println("done");
+			} else {
+				System.out.println();
+				failures.forEach(b -> System.out.println("Resolve failure for '" + b.getBundleId() + "'"));
+			}
+
+		}
+
+		List<Feature> failures = featureList.stream().filter(featureFilter)
+				.filter(((Predicate<Feature>) this::validate).negate()).collect(Collectors.toList());
 
 		if (failures.isEmpty()) {
 			System.out.println("done");
 		} else {
 			System.out.println();
-			failures.forEach(b -> System.out.println("Resolve failure for '" + b.getBundleId() + "'"));
+			failures.forEach(b -> System.out.println("Resolve failure for '" + b.getFeatureId() + "'"));
 		}
 
-		FileUtils.deleteDirectory(workingDirectory);
+		if (!keepGenFolder) {
+			FileUtils.deleteDirectory(workingDirectory);
+		} else {
+			System.err.println(workingDirectory);
+		}
 	}
 
 	private boolean validate(Bundle bundle) {
@@ -635,6 +880,20 @@ public abstract class OsgiToMaven {
 		}
 		return false;
 	}
+	
+	private boolean validate(Feature bundle) {
+		try {
+			FileOutputStream out = new FileOutputStream(new File(workingDirectory, "validate.sh"), true);
+			return exec(new String[] { "mvn", "dependency:tree", "-f",
+					new File(workingDirectory, "/poms/feature_" + bundle.getFeatureId() + ".xml").getAbsolutePath(),
+					"-Posgi-validate" }, out);
+		} catch (Throwable t) {
+
+		}
+		return false;
+	}
 
 	public abstract List<Bundle> generateBundleList() throws Throwable;
+
+	public abstract List<Feature> generateFeatureList() throws Throwable;
 }

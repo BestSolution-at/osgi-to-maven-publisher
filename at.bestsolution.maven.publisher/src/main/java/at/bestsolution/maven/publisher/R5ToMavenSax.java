@@ -20,6 +20,7 @@ package at.bestsolution.maven.publisher;
 import java.io.File;
 import java.io.FileInputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import javax.xml.parsers.SAXParser;
@@ -166,5 +167,11 @@ public class R5ToMavenSax extends OsgiToMaven {
 				dh);
 
 		return dh.bundles;
+	}
+	
+	@Override
+	public List<Feature> generateFeatureList() throws Throwable {
+		// TODO Auto-generated method stub
+		return Collections.emptyList();
 	}
 }
