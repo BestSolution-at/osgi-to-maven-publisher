@@ -634,7 +634,7 @@ public abstract class OsgiToMaven {
 		}
 
 		System.out.print("	Publishing " + feature.getFeatureId() + " ... ");
-		FileOutputStream out = new FileOutputStream(new File(workingDirectory, "publish.sh"), true);
+		FileOutputStream out = new FileOutputStream(new File(workingDirectory, "publish-feature.sh"), true);
 		out.write(("\n\necho 'Publishing " + feature.getFeatureId() + "'\n\n").getBytes());
 
 		boolean rv = exec(new String[] { "mvn", "gpg:sign-and-deploy-file", "-Durl=" + repositoryUrl,
@@ -767,6 +767,51 @@ public abstract class OsgiToMaven {
 
 		System.out.println("done");
 		return publishFilter;
+	}
+	
+	public void publishVersionModule(String groupId, String artifactId, String version, String propertyPrefix) throws Throwable {
+		new File(workingDirectory, "poms").mkdirs();
+		
+		try (FileOutputStream out = new FileOutputStream(
+				new File(new File(workingDirectory, "poms"), "version_module.xml"));
+				OutputStreamWriter w = new OutputStreamWriter(out)) {
+			writeLine(w,
+					"<project xmlns=\"http://maven.apache.org/POM/4.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"");
+			writeLine(w,
+					"	xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd\">");
+			writeLine(w, "	<modelVersion>4.0.0</modelVersion>");
+			writeLine(w, "	<groupId>"+groupId+"</groupId>");
+			writeLine(w, "	<artifactId>"+artifactId+"</artifactId>");
+			writeLine(w, "	<version>" + version + "</version>");
+			writeLine(w, "	<packaging>pom</packaging>");
+			
+			List<Bundle> bundleList = generateBundleList();
+			
+			writeLine(w, "	<properties>");
+			for( Bundle b : bundleList ) {
+				if( b.getBundleId().startsWith("file:") ) {
+					continue;
+				}
+				writeLine(w, "		<"+propertyPrefix+b.getBundleId()+">"+toPomVersion(b.getVersion())+(snapshotFilter.test(b) ? "-SNAPSHOT" : "")+"</"+propertyPrefix+b.getBundleId()+">");
+			}
+			writeLine(w, "	</properties>");
+			
+			w.write("</project>");
+			w.close();
+		}
+		
+		FileOutputStream out = new FileOutputStream(new File(workingDirectory, "publish-feature.sh"), true);
+		out.write(("\n\necho 'Publishing Version Bundle'\n\n").getBytes());
+		
+		boolean rv = exec(new String[] { "mvn", "gpg:sign-and-deploy-file", "-Durl=" + repositoryUrl,
+				"-DrepositoryId=" + repositoryId,
+				"-DpomFile=" + new File(workingDirectory, "/poms/version_module.xml").getAbsolutePath(),
+				"-Dfile=" + new File(workingDirectory, "/poms/version_module.xml").getAbsolutePath()
+				},
+				out);
+		if( ! rv ) {
+			System.err.println("Failed to publish binary artifact - 'Version Bundle'");
+		}
 	}
 
 	public void publish() throws Throwable {
