@@ -343,9 +343,12 @@ public abstract class OsgiToMaven {
 		return rv.stream().filter(rb -> resolvedBundleFilter.test(b, rb)).collect(Collectors.toSet());
 	}
 
-	static String toPomVersion(String version) {
-		String[] parts = version.split("\\.");
-		return parts[0] + "." + parts[1] + "." + parts[2];
+	static String toPomVersion(String version, boolean withSnapshot) {
+		if( withSnapshot ) {
+			String[] parts = version.split("\\.");
+			return parts[0] + "." + parts[1] + "." + parts[2] + "-SNAPSHOT";			
+		}
+		return version;
 	}
 
 	private void writeLine(OutputStreamWriter w, String v) {
@@ -367,8 +370,7 @@ public abstract class OsgiToMaven {
 			writeLine(w, "	<modelVersion>4.0.0</modelVersion>");
 			writeLine(w, "	<groupId>" + groupIdResolver.apply(b) + "</groupId>");
 			writeLine(w, "	<artifactId>" + b.getBundleId() + "</artifactId>");
-			writeLine(w, "	<version>" + toPomVersion(b.getVersion()) + (snapshotFilter.test(b) ? "-SNAPSHOT" : "")
-					+ "</version>");
+			writeLine(w, "	<version>" + toPomVersion(b.getVersion(), snapshotFilter.test(b)) + "</version>");
 
 			// Meta-Data
 			writeLine(w, "	<name>" + b.getName() + "</name>");
@@ -411,8 +413,7 @@ public abstract class OsgiToMaven {
 					w.write("		<dependency>\n");
 					w.write("			<groupId>" + dep.groupId + "</groupId>\n");
 					w.write("			<artifactId>" + dep.artifactId + "</artifactId>\n");
-					w.write("			<version>" + toPomVersion(rd.getBundle().getVersion())
-							+ (snapshotFilter.test(rd.getBundle()) ? "-SNAPSHOT" : "") + "</version>\n");
+					w.write("			<version>" + toPomVersion(rd.getBundle().getVersion(), snapshotFilter.test(rd.getBundle())) + "</version>\n");
 					if (rd.isOptional()) {
 						w.write("			<optional>true</optional>\n");
 					}
@@ -438,8 +439,7 @@ public abstract class OsgiToMaven {
 			writeLine(w, "	<modelVersion>4.0.0</modelVersion>");
 			writeLine(w, "	<groupId>" + featureGroupIdResolver.apply(f) + "</groupId>");
 			writeLine(w, "	<artifactId>" + f.getFeatureId() + "</artifactId>");
-			writeLine(w, "	<version>" + toPomVersion(f.getVersion())
-					+ (featureSnapshotFilter.test(f) ? "-SNAPSHOT" : "") + "</version>");
+			writeLine(w, "	<version>" + toPomVersion(f.getVersion(), featureSnapshotFilter.test(f)) + "</version>");
 
 			// Meta-Data
 			writeLine(w, "	<name>" + f.getName() + "</name>");
@@ -482,8 +482,7 @@ public abstract class OsgiToMaven {
 					w.write("		<dependency>\n");
 					w.write("			<groupId>" + dep.groupId + "</groupId>\n");
 					w.write("			<artifactId>" + dep.artifactId + "</artifactId>\n");
-					w.write("			<version>" + toPomVersion(rd.getBundle().getVersion())
-							+ (snapshotFilter.test(rd.getBundle()) ? "-SNAPSHOT" : "") + "</version>\n");
+					w.write("			<version>" + toPomVersion(rd.getBundle().getVersion(), snapshotFilter.test(rd.getBundle())) + "</version>\n");
 					if (rd.isOptional()) {
 						w.write("			<optional>true</optional>\n");
 					}
@@ -496,8 +495,7 @@ public abstract class OsgiToMaven {
 						w.write("		<dependency>\n");
 						w.write("			<groupId>" + dep.groupId + "</groupId>\n");
 						w.write("			<artifactId>" + dep.artifactId + "</artifactId>\n");
-						w.write("			<version>" + toPomVersion(rf.getVersion())
-								+ (featureSnapshotFilter.test(rf) ? "-SNAPSHOT" : "") + "</version>\n");
+						w.write("			<version>" + toPomVersion(rf.getVersion(), featureSnapshotFilter.test(rf)) + "</version>\n");
 						w.write("		</dependency>\n");
 					}
 				}
@@ -574,7 +572,7 @@ public abstract class OsgiToMaven {
 					new SourcedSearchExpression(groupIdResolver.apply(bundle)));
 			Query aQuery = indexer.constructQuery(MAVEN.ARTIFACT_ID, new SourcedSearchExpression(bundle.getBundleId()));
 			Query vQuery = indexer.constructQuery(MAVEN.VERSION,
-					new SourcedSearchExpression(toPomVersion(bundle.getVersion())));
+					new SourcedSearchExpression(toPomVersion(bundle.getVersion(),false)));
 			Query cQuery = indexer.constructQuery(MAVEN.CLASSIFIER, new SourcedSearchExpression(Field.NOT_PRESENT));
 
 			BooleanQuery bq = new BooleanQuery();
@@ -607,7 +605,7 @@ public abstract class OsgiToMaven {
 			Query aQuery = indexer.constructQuery(MAVEN.ARTIFACT_ID,
 					new SourcedSearchExpression(feature.getFeatureId()));
 			Query vQuery = indexer.constructQuery(MAVEN.VERSION,
-					new SourcedSearchExpression(toPomVersion(feature.getVersion())));
+					new SourcedSearchExpression(toPomVersion(feature.getVersion(),false)));
 			Query cQuery = indexer.constructQuery(MAVEN.CLASSIFIER, new SourcedSearchExpression(Field.NOT_PRESENT));
 
 			BooleanQuery bq = new BooleanQuery();
@@ -792,7 +790,7 @@ public abstract class OsgiToMaven {
 				if( b.getBundleId().startsWith("file:") ) {
 					continue;
 				}
-				writeLine(w, "		<"+propertyPrefix+b.getBundleId()+">"+toPomVersion(b.getVersion())+(snapshotFilter.test(b) ? "-SNAPSHOT" : "")+"</"+propertyPrefix+b.getBundleId()+">");
+				writeLine(w, "		<"+propertyPrefix+b.getBundleId()+">"+toPomVersion(b.getVersion(), snapshotFilter.test(b))+"</"+propertyPrefix+b.getBundleId()+">");
 			}
 			writeLine(w, "	</properties>");
 			
