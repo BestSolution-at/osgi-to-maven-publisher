@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -127,6 +128,7 @@ public class Bundle {
 	public void resolve(Function<Bundle, Set<ResolvedBundle>> resolver) {
 		if (resolvedBundleDeps == null) {
 			resolvedBundleDeps = new ArrayList<ResolvedBundle>(resolver.apply(this));
+			resolvedBundleDeps.removeIf( r -> Objects.equals(getBundleId(),r.getBundle().getBundleId()));
 			Collections.sort(resolvedBundleDeps, new Comparator<ResolvedBundle>() {
 				@Override
 				public int compare(ResolvedBundle o1, ResolvedBundle o2) {
