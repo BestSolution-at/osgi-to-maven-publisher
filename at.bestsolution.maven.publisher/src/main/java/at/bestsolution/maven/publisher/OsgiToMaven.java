@@ -142,6 +142,11 @@ public abstract class OsgiToMaven {
 	private boolean dryRun = false;
 	private boolean keepGenFolder = dryRun;
 
+	public void setDryRun(boolean dryRun) {
+		this.dryRun = dryRun;
+		this.keepGenFolder = dryRun;
+	}
+	
 	public void setMavenReplacementLookup(Function<Bundle, Optional<MavenDep>> mavenReplacementLookup) {
 		this.mavenReplacementLookup = mavenReplacementLookup;
 	}
