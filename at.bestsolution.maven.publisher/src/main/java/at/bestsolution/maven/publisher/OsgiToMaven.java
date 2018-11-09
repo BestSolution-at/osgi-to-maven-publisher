@@ -434,8 +434,9 @@ public abstract class OsgiToMaven {
 	}
 
 	private void createPom(Feature f) {
+		File file = new File(new File(workingDirectory, "poms"), "feature_" + f.getFeatureId() + ".xml");
 		try (FileOutputStream out = new FileOutputStream(
-				new File(new File(workingDirectory, "poms"), "feature_" + f.getFeatureId() + ".xml"));
+				file);
 				OutputStreamWriter w = new OutputStreamWriter(out)) {
 			writeLine(w,
 					"<project xmlns=\"http://maven.apache.org/POM/4.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"");
