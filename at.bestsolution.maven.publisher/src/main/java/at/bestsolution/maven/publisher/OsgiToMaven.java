@@ -815,7 +815,79 @@ public abstract class OsgiToMaven {
 				out);
 		if( ! rv ) {
 			System.err.println("Failed to publish binary artifact - 'Version Bundle'");
+		} else {
+			publishBOM(groupId, artifactId, version, propertyPrefix);
 		}
+	}
+	
+	private void publishBOM(String groupId, String artifactId, String version, String propertyPrefix) throws Throwable {
+		try (FileOutputStream out = new FileOutputStream(
+				new File(new File(workingDirectory, "poms"), "version_module-bom.xml"));
+				OutputStreamWriter w = new OutputStreamWriter(out)) {
+			writeLine(w,
+					"<project xmlns=\"http://maven.apache.org/POM/4.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"");
+			writeLine(w,
+					"	xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd\">");
+			writeLine(w, "	<modelVersion>4.0.0</modelVersion>");
+			writeLine(w, "	<groupId>" + groupId + "</groupId>");
+			writeLine(w, "	<artifactId>" + artifactId + "-bom</artifactId>");
+			writeLine(w, "	<version>" + version + "</version>");
+			writeLine(w, "	<packaging>pom</packaging>");
+			
+			List<Bundle> bundleList = generateBundleList();
+			List<Bundle> filteredBundles = bundleList.stream().filter(bundleFilter).collect(Collectors.toList());
+			
+			writeLine(w, "	<dependencies>");
+			for( Bundle b : filteredBundles ) {
+				if( b.getBundleId().startsWith("file:") 
+						|| b.getBundleId().endsWith(".source") 
+						|| b.getBundleId().endsWith(".feature.jar")
+						|| b.getBundleId().endsWith(".feature.group")
+						|| b.getBundleId().endsWith(".translated_host_properties")
+						|| b.getBundleId().endsWith(".nl")) {
+					continue;
+				}
+				
+				String aGroupId = groupIdResolver.apply(b);
+				String aArtifactId = b.getBundleId();
+				String aVersion = toPomVersion(b.getVersion(), snapshotFilter.test(b));
+				
+				Optional<MavenDep> op = mavenReplacementLookup.apply(b);
+				if( op.isPresent() ) {
+					aGroupId = op.get().groupId;
+					aArtifactId = op.get().artifactId;
+				}
+				
+				writeLine(w, "	<dependency>");
+				writeLine(w, "		<groupId>"+aGroupId+"</groupId>");
+				writeLine(w, "		<artifactId>"+aArtifactId+"</artifactId>");
+				writeLine(w, "		<version>"+aVersion+"</version>");
+				writeLine(w, "	</dependency>");
+			}
+			
+			List<Feature> featureList = generateFeatureList();
+			for( Feature f : featureList ) {
+				writeLine(w, "	<dependency>");
+				writeLine(w, "		<groupId>"+featureGroupIdResolver.apply(f)+"</groupId>");
+				writeLine(w, "		<artifactId>"+f.getFeatureId()+"</artifactId>");
+				writeLine(w, "		<version>"+toPomVersion(f.getVersion(), featureSnapshotFilter.test(f))+"</version>");
+				writeLine(w, "	</dependency>");
+			}
+			writeLine(w, "	</dependencies>");
+			
+			w.write("</project>");
+			w.close();
+		}
+		
+		FileOutputStream out = new FileOutputStream(new File(workingDirectory, "publish-feature.sh"), true);
+		out.write(("\n\necho 'Publishing Version Bundle'\n\n").getBytes());
+		
+		boolean rv = exec(new String[] { "mvn", "gpg:sign-and-deploy-file", "-Durl=" + repositoryUrl,
+				"-DrepositoryId=" + repositoryId,
+				"-DpomFile=" + new File(workingDirectory, "/poms/version_module-bom.xml").getAbsolutePath(),
+				"-Dfile=" + new File(workingDirectory, "/poms/version_module-bom.xml").getAbsolutePath()
+				},
+				out);
 	}
 
 	public void publish() throws Throwable {
