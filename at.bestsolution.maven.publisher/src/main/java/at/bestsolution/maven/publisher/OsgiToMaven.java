@@ -344,7 +344,7 @@ public abstract class OsgiToMaven {
 			}
 			return list.stream().map(bb -> new ResolvedBundle(bb, true)).collect(Collectors.toSet());
 		}).flatMap(bs -> bs.stream()).collect(Collectors.toSet()));
-
+		
 		return rv.stream().filter(rb -> resolvedBundleFilter.test(b, rb)).collect(Collectors.toSet());
 	}
 
@@ -743,7 +743,12 @@ public abstract class OsgiToMaven {
 	private Predicate<Bundle> generatePoms(List<Bundle> bundleList, List<Feature> featureList) {
 		bundleById = bundleList.stream().collect(Collectors.groupingBy(b -> b.getBundleId()));
 		featureById = featureList.stream().collect(Collectors.groupingBy(f -> f.getFeatureId()));
-		bundleExports = bundleList.stream().flatMap(i -> i.getExportPackages().stream()).collect(
+		bundleExports = bundleList.stream().flatMap(i -> {
+			if( i.getBundleId().equals("org.eclipse.m2e.maven.runtime") ) {
+				return i.getExportPackages().stream().filter( p -> ! p.getName().startsWith("com.google.inject"));
+			}
+			return i.getExportPackages().stream();
+		}).collect(
 				Collectors.groupingBy(e -> e.getName(), Collectors.mapping(e -> e.getBundle(), Collectors.toSet())));
 
 		System.out.print("Resolving bundles ...");
