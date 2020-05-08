@@ -24,6 +24,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashSet;
@@ -688,46 +689,27 @@ public abstract class OsgiToMaven {
 				out);
 
 		exec(new String[] { "jar", "cf", javaDocJar, "-C", javadocDirectory + "/", "." }, out);
-		boolean rv = exec(new String[] { "mvn", "gpg:sign-and-deploy-file", "-Durl=" + repositoryUrl,
+		
+		List<String> arguments = new ArrayList<>(Arrays.asList("mvn", "gpg:sign-and-deploy-file", "-Durl=" + repositoryUrl,
 				"-DrepositoryId=" + repositoryId,
 				"-DpomFile=" + new File(workingDirectory, "/poms/" + bundle.getBundleId() + ".xml").getAbsolutePath(),
 				"-Dfile=" + new File(workingDirectory, bundle.getBundleId() + "_" + bundle.getVersion() + ".jar")
-						.getAbsolutePath() },
-				out);
-		if (!rv) {
-			System.err.println("Failed to publish binary artifact - '" + bundle.getBundleId() + "'");
-			return false;
-		}
-
+						.getAbsolutePath()));
 		if (new File(workingDirectory, bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").exists()) {
-			rv = exec(new String[] { "mvn", "gpg:sign-and-deploy-file", "-Durl=" + repositoryUrl,
-					"-DrepositoryId=" + repositoryId,
-					"-DpomFile="
-							+ new File(workingDirectory, "/poms/" + bundle.getBundleId() + ".xml").getAbsolutePath(),
-					"-Dfile=" + new File(workingDirectory,
-							bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").getAbsolutePath(),
-					"-Dclassifier=sources" }, out);
-
-			if (!rv) {
-				System.err.println("ERROR: Failed to publish source artifact - '" + bundle.getBundleId() + "'");
-				return false;
-			}
-
-			rv = exec(new String[] { "mvn", "gpg:sign-and-deploy-file", "-Durl=" + repositoryUrl,
-					"-DrepositoryId=" + repositoryId,
-					"-DpomFile="
-							+ new File(workingDirectory, "/poms/" + bundle.getBundleId() + ".xml").getAbsolutePath(),
-					"-Dfile=" + javaDocJar, "-Dclassifier=javadoc" }, out);
-
-			if (!rv) {
-				System.err.println("ERROR: Failed to publish javadoc artifact - '" + bundle.getBundleId() + "'");
-				return false;
-			}
+			arguments.add("-Dsources="+ new File(workingDirectory,bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").getAbsolutePath());
+			arguments.add("-Djavadoc="+ javaDocJar);
 		} else {
 			System.err.println("ERROR: No source jar available");
 			if (sourceEnforced.test(bundle)) {
 				return false;
 			}
+		}
+		
+		boolean rv = exec(arguments.toArray(new String[0]),out);
+		
+		if (!rv) {
+			System.err.println("Failed to publish binary artifact - '" + bundle.getBundleId() + "'");
+			return false;
 		}
 
 		exec(new String[] { "rm", "-rf", javadocDirectory }, out);
