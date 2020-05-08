@@ -824,7 +824,8 @@ public abstract class OsgiToMaven {
 			List<Bundle> bundleList = generateBundleList();
 			List<Bundle> filteredBundles = bundleList.stream().filter(bundleFilter).collect(Collectors.toList());
 			
-			writeLine(w, "	<dependencies>");
+			writeLine(w, "	<dependencyManagement>");
+			writeLine(w, "		<dependencies>");
 			for( Bundle b : filteredBundles ) {
 				if( b.getBundleId().startsWith("file:") 
 						|| b.getBundleId().endsWith(".source") 
@@ -845,22 +846,23 @@ public abstract class OsgiToMaven {
 					aArtifactId = op.get().artifactId;
 				}
 				
-				writeLine(w, "	<dependency>");
-				writeLine(w, "		<groupId>"+aGroupId+"</groupId>");
-				writeLine(w, "		<artifactId>"+aArtifactId+"</artifactId>");
-				writeLine(w, "		<version>"+aVersion+"</version>");
-				writeLine(w, "	</dependency>");
+				writeLine(w, "		<dependency>");
+				writeLine(w, "			<groupId>"+aGroupId+"</groupId>");
+				writeLine(w, "			<artifactId>"+aArtifactId+"</artifactId>");
+				writeLine(w, "			<version>"+aVersion+"</version>");
+				writeLine(w, "		</dependency>");
 			}
 			
 			List<Feature> featureList = generateFeatureList();
 			for( Feature f : featureList ) {
-				writeLine(w, "	<dependency>");
-				writeLine(w, "		<groupId>"+featureGroupIdResolver.apply(f)+"</groupId>");
-				writeLine(w, "		<artifactId>"+f.getFeatureId()+"</artifactId>");
-				writeLine(w, "		<version>"+toPomVersion(f.getVersion(), featureSnapshotFilter.test(f))+"</version>");
-				writeLine(w, "	</dependency>");
+				writeLine(w, "		<dependency>");
+				writeLine(w, "			<groupId>"+featureGroupIdResolver.apply(f)+"</groupId>");
+				writeLine(w, "			<artifactId>"+f.getFeatureId()+"</artifactId>");
+				writeLine(w, "			<version>"+toPomVersion(f.getVersion(), featureSnapshotFilter.test(f))+"</version>");
+				writeLine(w, "		</dependency>");
 			}
-			writeLine(w, "	</dependencies>");
+			writeLine(w, "		</dependencies>");
+			writeLine(w, "	<dependencyManagement>");
 			
 			w.write("</project>");
 			w.close();
