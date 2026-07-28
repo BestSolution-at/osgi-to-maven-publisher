@@ -129,6 +129,7 @@ public class Bundle {
 		if (resolvedBundleDeps == null) {
 			resolvedBundleDeps = new ArrayList<ResolvedBundle>(resolver.apply(this));
 			resolvedBundleDeps.removeIf( r -> Objects.equals(getBundleId(),r.getBundle().getBundleId()));
+			resolvedBundleDeps.removeIf( r -> Objects.equals(r.getBundle().getBundleId(), "a.jre.javase"));
 			Collections.sort(resolvedBundleDeps, new Comparator<ResolvedBundle>() {
 				@Override
 				public int compare(ResolvedBundle o1, ResolvedBundle o2) {

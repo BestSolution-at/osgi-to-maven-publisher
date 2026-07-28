@@ -934,6 +934,7 @@ public abstract class OsgiToMaven {
 
 		if (failure.get()) {
 			System.out.println("Failed to publish all bundles. Exiting ...");
+			System.out.println("Sources at " + workingDirectory);
 			System.exit(1);
 		}
 
