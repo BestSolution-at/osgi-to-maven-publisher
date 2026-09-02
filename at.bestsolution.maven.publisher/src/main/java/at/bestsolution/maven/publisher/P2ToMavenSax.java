@@ -21,6 +21,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
@@ -52,7 +53,7 @@ public class P2ToMavenSax extends OsgiToMaven {
 		SaxHandlerImpl dh = new SaxHandlerImpl();
 		parser.parse(new FileInputStream(new File(workingDirectory, "content.xml")), dh);
 
-		return dh.bundles;
+		return dh.bundles.stream().filter(this.bundleFilter).collect(Collectors.toList());
 	}
 
 	@Override
@@ -90,15 +91,15 @@ public class P2ToMavenSax extends OsgiToMaven {
 				} else if ("org.eclipse.equinox.p2.name".equals(attributes.getValue("name"))) {
 					currentFeature.setName(attributes.getValue("value"));
 				}
-			} else if( currentFeature != null && qName.equals("requires") ) {
+			} else if (currentFeature != null && qName.equals("requires")) {
 				inRequires = true;
-			} else if( inRequires && qName.equals("required") ) {
+			} else if (inRequires && qName.equals("required")) {
 				String value = attributes.getValue("name");
-				if( value.endsWith("feature.jar") ) {
+				if (value.endsWith("feature.jar")) {
 					return;
 				}
-				
-				if( value.endsWith("feature.group") ) {
+
+				if (value.endsWith("feature.group")) {
 					Feature f = new Feature();
 					f.setFeatureId(value.substring(0, value.length() - "feature.group".length() - 1));
 					currentFeature.getFeatures().add(f);
@@ -109,12 +110,12 @@ public class P2ToMavenSax extends OsgiToMaven {
 				}
 			}
 		}
-		
+
 		@Override
 		public void endElement(String uri, String localName, String qName) throws SAXException {
-			if (qName.equals("unit") ) {
+			if (qName.equals("unit")) {
 				currentFeature = null;
-			} else if( qName.equals("requires") ) {
+			} else if (qName.equals("requires")) {
 				inRequires = false;
 			}
 		}

@@ -84,7 +84,7 @@ public abstract class OsgiToMaven {
 	private Function<Bundle, Optional<MavenDep>> mavenReplacementLookup = b -> Optional.empty();
 	private Predicate<Bundle> publishFilter = b -> true;
 	private Predicate<Feature> featurePublishFilter = f -> true;
-	private Predicate<Bundle> bundleFilter = b -> true;
+	protected Predicate<Bundle> bundleFilter = b -> true;
 	private Predicate<Feature> featureFilter = b -> true;
 	private Predicate<Bundle> snapshotFilter = b -> false;
 	private Predicate<Feature> featureSnapshotFilter = b -> false;
@@ -141,13 +141,14 @@ public abstract class OsgiToMaven {
 	private static AtomicInteger counter = new AtomicInteger();
 
 	private boolean dryRun = false;
+	private boolean useMavenIndex = false;
 	private boolean keepGenFolder = dryRun;
 
 	public void setDryRun(boolean dryRun) {
 		this.dryRun = dryRun;
 		this.keepGenFolder = dryRun;
 	}
-	
+
 	public void setMavenReplacementLookup(Function<Bundle, Optional<MavenDep>> mavenReplacementLookup) {
 		this.mavenReplacementLookup = mavenReplacementLookup;
 	}
@@ -155,7 +156,7 @@ public abstract class OsgiToMaven {
 	public void setPublishFilter(Predicate<Bundle> publishFilter) {
 		this.publishFilter = publishFilter;
 	}
-	
+
 	public void setFeaturePublishFilter(Predicate<Feature> featurePublishFilter) {
 		this.featurePublishFilter = featurePublishFilter;
 	}
@@ -183,7 +184,7 @@ public abstract class OsgiToMaven {
 	public void setSnapshotFilter(Predicate<Bundle> snapshotFilter) {
 		this.snapshotFilter = snapshotFilter;
 	}
-	
+
 	public void setFeatureSnapshotFilter(Predicate<Feature> featureSnapshotFilter) {
 		this.featureSnapshotFilter = featureSnapshotFilter;
 	}
@@ -345,14 +346,14 @@ public abstract class OsgiToMaven {
 			}
 			return list.stream().map(bb -> new ResolvedBundle(bb, true)).collect(Collectors.toSet());
 		}).flatMap(bs -> bs.stream()).collect(Collectors.toSet()));
-		
+
 		return rv.stream().filter(rb -> resolvedBundleFilter.test(b, rb)).collect(Collectors.toSet());
 	}
 
 	static String toPomVersion(String version, boolean withSnapshot) {
-		if( withSnapshot ) {
+		if (withSnapshot) {
 			String[] parts = version.split("\\.");
-			return parts[0] + "." + parts[1] + "." + parts[2] + "-SNAPSHOT";			
+			return parts[0] + "." + parts[1] + "." + parts[2] + "-SNAPSHOT";
 		}
 		return version;
 	}
@@ -419,7 +420,9 @@ public abstract class OsgiToMaven {
 					w.write("		<dependency>\n");
 					w.write("			<groupId>" + dep.groupId + "</groupId>\n");
 					w.write("			<artifactId>" + dep.artifactId + "</artifactId>\n");
-					w.write("			<version>" + toPomVersion(rd.getBundle().getVersion(), snapshotFilter.test(rd.getBundle())) + "</version>\n");
+					w.write("			<version>"
+							+ toPomVersion(rd.getBundle().getVersion(), snapshotFilter.test(rd.getBundle()))
+							+ "</version>\n");
 					if (rd.isOptional()) {
 						w.write("			<optional>true</optional>\n");
 					}
@@ -489,7 +492,9 @@ public abstract class OsgiToMaven {
 					w.write("		<dependency>\n");
 					w.write("			<groupId>" + dep.groupId + "</groupId>\n");
 					w.write("			<artifactId>" + dep.artifactId + "</artifactId>\n");
-					w.write("			<version>" + toPomVersion(rd.getBundle().getVersion(), snapshotFilter.test(rd.getBundle())) + "</version>\n");
+					w.write("			<version>"
+							+ toPomVersion(rd.getBundle().getVersion(), snapshotFilter.test(rd.getBundle()))
+							+ "</version>\n");
 					if (rd.isOptional()) {
 						w.write("			<optional>true</optional>\n");
 					}
@@ -502,7 +507,8 @@ public abstract class OsgiToMaven {
 						w.write("		<dependency>\n");
 						w.write("			<groupId>" + dep.groupId + "</groupId>\n");
 						w.write("			<artifactId>" + dep.artifactId + "</artifactId>\n");
-						w.write("			<version>" + toPomVersion(rf.getVersion(), featureSnapshotFilter.test(rf)) + "</version>\n");
+						w.write("			<version>" + toPomVersion(rf.getVersion(), featureSnapshotFilter.test(rf))
+								+ "</version>\n");
 						w.write("		</dependency>\n");
 					}
 				}
@@ -568,7 +574,7 @@ public abstract class OsgiToMaven {
 	private boolean isAvailable(Bundle bundle) {
 		// System.err.println("SEARCHING " + groupIdResolver.apply(bundle) + ":" +
 		// bundle.getBundleId() + ":" + bundle.getVersion());
-		if (dryRun) {
+		if (dryRun || !useMavenIndex) {
 			return false;
 		}
 
@@ -579,7 +585,7 @@ public abstract class OsgiToMaven {
 					new SourcedSearchExpression(groupIdResolver.apply(bundle)));
 			Query aQuery = indexer.constructQuery(MAVEN.ARTIFACT_ID, new SourcedSearchExpression(bundle.getBundleId()));
 			Query vQuery = indexer.constructQuery(MAVEN.VERSION,
-					new SourcedSearchExpression(toPomVersion(bundle.getVersion(),false)));
+					new SourcedSearchExpression(toPomVersion(bundle.getVersion(), false)));
 			Query cQuery = indexer.constructQuery(MAVEN.CLASSIFIER, new SourcedSearchExpression(Field.NOT_PRESENT));
 
 			BooleanQuery bq = new BooleanQuery();
@@ -600,7 +606,7 @@ public abstract class OsgiToMaven {
 	private boolean isAvailable(Feature feature) {
 		// System.err.println("SEARCHING " + groupIdResolver.apply(bundle) + ":" +
 		// bundle.getBundleId() + ":" + bundle.getVersion());
-		if (dryRun) {
+		if (dryRun || !useMavenIndex) {
 			return false;
 		}
 
@@ -612,7 +618,7 @@ public abstract class OsgiToMaven {
 			Query aQuery = indexer.constructQuery(MAVEN.ARTIFACT_ID,
 					new SourcedSearchExpression(feature.getFeatureId()));
 			Query vQuery = indexer.constructQuery(MAVEN.VERSION,
-					new SourcedSearchExpression(toPomVersion(feature.getVersion(),false)));
+					new SourcedSearchExpression(toPomVersion(feature.getVersion(), false)));
 			Query cQuery = indexer.constructQuery(MAVEN.CLASSIFIER, new SourcedSearchExpression(Field.NOT_PRESENT));
 
 			BooleanQuery bq = new BooleanQuery();
@@ -685,28 +691,42 @@ public abstract class OsgiToMaven {
 				new File(workingDirectory, bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar")
 						.getAbsolutePath() },
 				out);
-		exec(new String[] { "javadoc", "-d", javadocDirectory, "-sourcepath", sourceDirectory, "-subpackages", "." },
+		String name = bundle.getBundleId();
+		int firstDot = name.indexOf('.');
+
+		if (firstDot == -1) {
+			System.out.print(
+					"	Unable to extract root package from bundle name '" + name + "' - Assuming org");
+		}
+
+		String packageRoot = firstDot == -1 ? "org" : name.substring(0, firstDot);
+		exec(new String[] { "javadoc", "--ignore-source-errors", "-d", javadocDirectory, "-sourcepath", sourceDirectory,
+				"-subpackages",
+				packageRoot },
 				out);
 
 		exec(new String[] { "jar", "cf", javaDocJar, "-C", javadocDirectory + "/", "." }, out);
-		
-		List<String> arguments = new ArrayList<>(Arrays.asList("mvn", "gpg:sign-and-deploy-file", "-Durl=" + repositoryUrl,
+
+		List<String> arguments = new ArrayList<>(Arrays.asList("mvn", "gpg:sign-and-deploy-file",
+				"-Durl=" + repositoryUrl,
 				"-DrepositoryId=" + repositoryId,
 				"-DpomFile=" + new File(workingDirectory, "/poms/" + bundle.getBundleId() + ".xml").getAbsolutePath(),
 				"-Dfile=" + new File(workingDirectory, bundle.getBundleId() + "_" + bundle.getVersion() + ".jar")
 						.getAbsolutePath()));
 		if (new File(workingDirectory, bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").exists()) {
-			arguments.add("-Dsources="+ new File(workingDirectory,bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar").getAbsolutePath());
-			arguments.add("-Djavadoc="+ javaDocJar);
+			arguments.add("-Dsources="
+					+ new File(workingDirectory, bundle.getBundleId() + ".source_" + bundle.getVersion() + ".jar")
+							.getAbsolutePath());
+			arguments.add("-Djavadoc=" + javaDocJar);
 		} else {
 			System.err.println("ERROR: No source jar available");
 			if (sourceEnforced.test(bundle)) {
 				return false;
 			}
 		}
-		
-		boolean rv = exec(arguments.toArray(new String[0]),out);
-		
+
+		boolean rv = exec(arguments.toArray(new String[0]), out);
+
 		if (!rv) {
 			System.err.println("Failed to publish binary artifact - '" + bundle.getBundleId() + "'");
 			return false;
@@ -723,11 +743,11 @@ public abstract class OsgiToMaven {
 	}
 
 	private Predicate<Bundle> generatePoms(List<Bundle> bundleList, List<Feature> featureList) {
-		bundleById = bundleList.stream().collect(Collectors.groupingBy(b -> b.getBundleId()));
-		featureById = featureList.stream().collect(Collectors.groupingBy(f -> f.getFeatureId()));
+		bundleById = bundleList.stream().filter(bundleFilter).collect(Collectors.groupingBy(b -> b.getBundleId()));
+		featureById = featureList.stream().filter(featureFilter).collect(Collectors.groupingBy(f -> f.getFeatureId()));
 		bundleExports = bundleList.stream().flatMap(i -> {
-			if( i.getBundleId().equals("org.eclipse.m2e.maven.runtime") ) {
-				return i.getExportPackages().stream().filter( p -> ! p.getName().startsWith("com.google.inject"));
+			if (i.getBundleId().equals("org.eclipse.m2e.maven.runtime")) {
+				return i.getExportPackages().stream().filter(p -> !p.getName().startsWith("com.google.inject"));
 			}
 			return i.getExportPackages().stream();
 		}).collect(
@@ -759,10 +779,11 @@ public abstract class OsgiToMaven {
 		System.out.println("done");
 		return publishFilter;
 	}
-	
-	public void publishVersionModule(String groupId, String artifactId, String version, String propertyPrefix) throws Throwable {
+
+	public void publishVersionModule(String groupId, String artifactId, String version, String propertyPrefix)
+			throws Throwable {
 		new File(workingDirectory, "poms").mkdirs();
-		
+
 		try (FileOutputStream out = new FileOutputStream(
 				new File(new File(workingDirectory, "poms"), "version_module.xml"));
 				OutputStreamWriter w = new OutputStreamWriter(out)) {
@@ -771,42 +792,45 @@ public abstract class OsgiToMaven {
 			writeLine(w,
 					"	xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd\">");
 			writeLine(w, "	<modelVersion>4.0.0</modelVersion>");
-			writeLine(w, "	<groupId>"+groupId+"</groupId>");
-			writeLine(w, "	<artifactId>"+artifactId+"</artifactId>");
+			writeLine(w, "	<groupId>" + groupId + "</groupId>");
+			writeLine(w, "	<artifactId>" + artifactId + "</artifactId>");
 			writeLine(w, "	<version>" + version + "</version>");
 			writeLine(w, "	<packaging>pom</packaging>");
-			
+
 			List<Bundle> bundleList = generateBundleList();
-			
+
 			writeLine(w, "	<properties>");
-			for( Bundle b : bundleList ) {
-				if( b.getBundleId().startsWith("file:") ) {
+			for (Bundle b : bundleList) {
+				if (b.getBundleId().startsWith("file:")) {
 					continue;
 				}
-				writeLine(w, "		<"+propertyPrefix+b.getBundleId()+">"+toPomVersion(b.getVersion(), snapshotFilter.test(b))+"</"+propertyPrefix+b.getBundleId()+">");
+				writeLine(w,
+						"		<" + propertyPrefix + b.getBundleId() + ">"
+								+ toPomVersion(b.getVersion(), snapshotFilter.test(b)) + "</" + propertyPrefix
+								+ b.getBundleId() + ">");
 			}
 			writeLine(w, "	</properties>");
-			
+
 			w.write("</project>");
 			w.close();
 		}
-		
+
 		FileOutputStream out = new FileOutputStream(new File(workingDirectory, "publish-feature.sh"), true);
 		out.write(("\n\necho 'Publishing Version Bundle'\n\n").getBytes());
-		
+
 		boolean rv = exec(new String[] { "mvn", "gpg:sign-and-deploy-file", "-Durl=" + repositoryUrl,
 				"-DrepositoryId=" + repositoryId,
 				"-DpomFile=" + new File(workingDirectory, "/poms/version_module.xml").getAbsolutePath(),
 				"-Dfile=" + new File(workingDirectory, "/poms/version_module.xml").getAbsolutePath()
-				},
+		},
 				out);
-		if( ! rv ) {
+		if (!rv) {
 			System.err.println("Failed to publish binary artifact - 'Version Bundle'");
 		} else {
 			publishBOM(groupId, artifactId, version, propertyPrefix);
 		}
 	}
-	
+
 	private void publishBOM(String groupId, String artifactId, String version, String propertyPrefix) throws Throwable {
 		try (FileOutputStream out = new FileOutputStream(
 				new File(new File(workingDirectory, "poms"), "version_module-bom.xml"));
@@ -820,62 +844,63 @@ public abstract class OsgiToMaven {
 			writeLine(w, "	<artifactId>" + artifactId + "-bom</artifactId>");
 			writeLine(w, "	<version>" + version + "</version>");
 			writeLine(w, "	<packaging>pom</packaging>");
-			
+
 			List<Bundle> bundleList = generateBundleList();
 			List<Bundle> filteredBundles = bundleList.stream().filter(bundleFilter).collect(Collectors.toList());
-			
+
 			writeLine(w, "	<dependencyManagement>");
 			writeLine(w, "		<dependencies>");
-			for( Bundle b : filteredBundles ) {
-				if( b.getBundleId().startsWith("file:") 
-						|| b.getBundleId().endsWith(".source") 
+			for (Bundle b : filteredBundles) {
+				if (b.getBundleId().startsWith("file:")
+						|| b.getBundleId().endsWith(".source")
 						|| b.getBundleId().endsWith(".feature.jar")
 						|| b.getBundleId().endsWith(".feature.group")
 						|| b.getBundleId().endsWith(".translated_host_properties")
 						|| b.getBundleId().endsWith(".nl")) {
 					continue;
 				}
-				
+
 				String aGroupId = groupIdResolver.apply(b);
 				String aArtifactId = b.getBundleId();
 				String aVersion = toPomVersion(b.getVersion(), snapshotFilter.test(b));
-				
+
 				Optional<MavenDep> op = mavenReplacementLookup.apply(b);
-				if( op.isPresent() ) {
+				if (op.isPresent()) {
 					aGroupId = op.get().groupId;
 					aArtifactId = op.get().artifactId;
 				}
-				
+
 				writeLine(w, "		<dependency>");
-				writeLine(w, "			<groupId>"+aGroupId+"</groupId>");
-				writeLine(w, "			<artifactId>"+aArtifactId+"</artifactId>");
-				writeLine(w, "			<version>"+aVersion+"</version>");
+				writeLine(w, "			<groupId>" + aGroupId + "</groupId>");
+				writeLine(w, "			<artifactId>" + aArtifactId + "</artifactId>");
+				writeLine(w, "			<version>" + aVersion + "</version>");
 				writeLine(w, "		</dependency>");
 			}
-			
+
 			List<Feature> featureList = generateFeatureList();
-			for( Feature f : featureList ) {
+			for (Feature f : featureList) {
 				writeLine(w, "		<dependency>");
-				writeLine(w, "			<groupId>"+featureGroupIdResolver.apply(f)+"</groupId>");
-				writeLine(w, "			<artifactId>"+f.getFeatureId()+"</artifactId>");
-				writeLine(w, "			<version>"+toPomVersion(f.getVersion(), featureSnapshotFilter.test(f))+"</version>");
+				writeLine(w, "			<groupId>" + featureGroupIdResolver.apply(f) + "</groupId>");
+				writeLine(w, "			<artifactId>" + f.getFeatureId() + "</artifactId>");
+				writeLine(w, "			<version>" + toPomVersion(f.getVersion(), featureSnapshotFilter.test(f))
+						+ "</version>");
 				writeLine(w, "		</dependency>");
 			}
 			writeLine(w, "		</dependencies>");
 			writeLine(w, "	<dependencyManagement>");
-			
+
 			w.write("</project>");
 			w.close();
 		}
-		
+
 		FileOutputStream out = new FileOutputStream(new File(workingDirectory, "publish-feature.sh"), true);
 		out.write(("\n\necho 'Publishing Version Bundle'\n\n").getBytes());
-		
+
 		boolean rv = exec(new String[] { "mvn", "gpg:sign-and-deploy-file", "-Durl=" + repositoryUrl,
 				"-DrepositoryId=" + repositoryId,
 				"-DpomFile=" + new File(workingDirectory, "/poms/version_module-bom.xml").getAbsolutePath(),
 				"-Dfile=" + new File(workingDirectory, "/poms/version_module-bom.xml").getAbsolutePath()
-				},
+		},
 				out);
 	}
 
@@ -947,7 +972,7 @@ public abstract class OsgiToMaven {
 		if (!keepGenFolder) {
 			FileUtils.deleteDirectory(workingDirectory);
 		}
-		
+
 		new File(workingDirectory, "poms").mkdirs();
 		new File(workingDirectory, "m2-repo").mkdirs();
 
@@ -1000,7 +1025,7 @@ public abstract class OsgiToMaven {
 		}
 		return false;
 	}
-	
+
 	private boolean validate(Feature bundle) {
 		try {
 			FileOutputStream out = new FileOutputStream(new File(workingDirectory, "validate.sh"), true);
